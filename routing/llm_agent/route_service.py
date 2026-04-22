@@ -152,6 +152,7 @@ def request_task(data):
     # print(LLM_NAME)
     try:
         input_prompt = AGENT_PROMPT.format_map({"query": query_text})
+        
         print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}')
         single_response, completion_tokens = get_llm_response_via_api(prompt=input_prompt,
                                                                       base_url=api_base,
