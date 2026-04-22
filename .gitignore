@@ -1,0 +1,24 @@
+/checkpoints/
+/docker/
+/docs/
+/examples/
+/memory_data/
+/RetroAgent-main/
+/skill_generation/
+/SkillRL_origin/
+/swanlog/
+/models/
+/outputs/
+/train_sft/
+/env.sh
+/2603.28716v1.pdf
+/README_old.md
+/run_alfworld_skills_management.log
+*.whl
+/wandb/
+core.*
+# Python cache/build artifacts
+**/__pycache__/
+*.py[cod]
+*.egg-info
+/agent_system/environments/env_package/
