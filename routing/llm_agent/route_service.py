@@ -202,7 +202,7 @@ def check_llm_name(target_llm):
     # else:
     #     # print("!!!!!!!!!!!LLM Name Error!!!!!!!!!!!", target_llm)
     #     LLM_NAME = ""
-    if "qwen2.5" in target_llm:
+    if "qwen2.5" in target_llm or "qwen" in target_llm:
         LLM_NAME = "qwen2.5-7B"
     elif "deepseek" in target_llm:
         LLM_NAME = "deepseek"
