@@ -37,7 +37,7 @@ SKILL_RETRIEVAL_SERVICE_URL="http://127.0.0.1:8003/retrieve_batch"
 num_cpus_per_env_worker=0.1
 train_data_size=16
 val_data_size=16
-group_size=8
+group_size=2
 cost_coe="${COST_COE:-0.0}"
 
 # ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-4B-Instruct-2507"
@@ -130,7 +130,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='verl_agent_alfworld' \
     trainer.experiment_name='grpo_qwen3-4b_skills_d2skill' \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.log_val_generations=10 \
     trainer.save_freq=20 \
