@@ -729,6 +729,7 @@ class TrajectoryCollector:
         #但现在只有model
         cur_actions, contents = self.postprocess_predictions(predictions)
         contexts = original_obs.get('text', None)
+        forced_route_model = self._get_forced_route_model()
         # print(f"contents: {contents}")
         next_obs, dones, valid_action, is_route, cur_completion_tokens = [], [], [], [], []
         # 构造agent的content
@@ -745,7 +746,7 @@ class TrajectoryCollector:
         # }
         route_queries = {
             "model_name": [
-                content
+                forced_route_model or content
                 for action, context, content in zip(cur_actions, contexts, contents)
                 if action == 'search'
             ],
@@ -799,7 +800,7 @@ class TrajectoryCollector:
                         next_obs.append(f'\n\n<information>{model_resp}</information>\n\n')
                         model_actions.append(model_resp)
                         valid_action.append(1)
-                        models.append(content.strip().lower())
+                        models.append((forced_route_model or content).strip().lower())
                     dones.append(0)
                     is_route.append(1)
                     cur_completion_tokens.append(completion_tokens_list.pop(0))
@@ -817,6 +818,18 @@ class TrajectoryCollector:
         assert len(completion_tokens_list) == 0
         # models = cur_actions
         return next_obs, dones, valid_action, is_route, cur_completion_tokens, model_actions, models
+
+    def _get_forced_route_model(self) -> str:
+        """Optional eval hook: force every routed search call to a fixed backend model."""
+        routing_cfg = self.config.get("routing", {}) if hasattr(self.config, "get") else {}
+        enabled = bool(routing_cfg.get("force_model_enable", False))
+        if not enabled:
+            return ""
+        model_name = str(routing_cfg.get("force_model_name", "")).strip()
+        if not model_name:
+            raise ValueError("routing.force_model_enable=True requires routing.force_model_name to be set")
+        return model_name
+
     def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
         """
         Process (text-based) predictions from llm into actions and validity flags.
