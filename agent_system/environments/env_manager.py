@@ -559,7 +559,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                         action_history="",
                         current_step=1,
                         current_observation=text_obs[i],
-                        admissible_actions=reformatted_admissible_actions
+                        admissible_actions=reformatted_admissible_actions,
+                        output_instruction=ALFWORLD_OUTPUT_INSTRUCTION,
                     )
                     route_obs = ROUTING_PROMPT_TEMPLATE.format(
                         task_description=task_description,
@@ -574,7 +575,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 else:
                     obs = ALFWORLD_TEMPLATE_NO_HIS.format(
                         current_observation=text_obs[i],
-                        admissible_actions=reformatted_admissible_actions
+                        admissible_actions=reformatted_admissible_actions,
+                        output_instruction=ALFWORLD_OUTPUT_INSTRUCTION,
                     )
                     route_obs = ROUTING_PROMPT_TEMPLATE.format(
                         task_description=task_description,
@@ -597,7 +599,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                     action_history=memory_contexts[i],
                     current_step=len(self.memory[i]) + 1,
                     current_observation=text_obs[i],
-                    admissible_actions=reformatted_admissible_actions
+                    admissible_actions=reformatted_admissible_actions,
+                    output_instruction=ALFWORLD_OUTPUT_INSTRUCTION,
                 )
                 route_obs = ROUTING_PROMPT_TEMPLATE.format(
                     task_description=task_description,
@@ -618,7 +621,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                     action_history=memory_contexts[i],
                     current_step=len(self.memory[i]) + 1,
                     current_observation=text_obs[i],
-                    admissible_actions=reformatted_admissible_actions
+                    admissible_actions=reformatted_admissible_actions,
+                    output_instruction=ALFWORLD_OUTPUT_INSTRUCTION,
                 )
                 route_obs = ROUTING_PROMPT_TEMPLATE.format(
                     task_description=task_description,

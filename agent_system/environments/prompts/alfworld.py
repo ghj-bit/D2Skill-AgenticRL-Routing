@@ -14,14 +14,24 @@
 # limitations under the License.
 
 # --------------------- ALFWorld --------------------- #
+ALFWORLD_OUTPUT_INSTRUCTION = """
+Output requirements:
+- Output exactly two blocks and no extra text:
+  <think>...</think>
+  <action>...</action>
+- Keep <think> concise but useful, normally 3-5 short sentences. Do not spend the full 512-token budget on reasoning.
+- You MUST close </think> early enough to output <action>.
+- You MUST output <action> before the response ends.
+- The <action> content MUST be exactly one admissible action copied from the list above.
+"""
+
 ALFWORLD_TEMPLATE_NO_HIS = """
 You are an expert agent operating in the ALFRED Embodied Environment.
 Your current observation is: {current_observation}
 Your admissible actions of the current situation are: [{admissible_actions}].
 
 Now it's your turn to take an action.
-You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. 
-Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
+{output_instruction}
 """
 
 ALFWORLD_TEMPLATE = """
@@ -31,8 +41,7 @@ You are now at step {current_step} and your current observation is: {current_obs
 Your admissible actions of the current situation are: [{admissible_actions}].
 
 Now it's your turn to take an action.
-You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags.
-Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
+{output_instruction}
 """
 
 
@@ -97,8 +106,7 @@ For the current step, you should follow this process:
 3. Reason step-by-step and choose the best admissible action
 
 Now it's your turn to take an action.
-You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags.
-Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
+{output_instruction}
 """
 
 
