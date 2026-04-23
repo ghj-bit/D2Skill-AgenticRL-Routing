@@ -754,9 +754,10 @@ class RayPPOTrainer:
         sample_outputs = []
         sample_scores = []
 
-        # Per validation round: collect failed trajectories with refined_trajectory/query_texts
-        # and generate skills in one consolidated update.
+        # Per validation round: collect failed/successful trajectories with
+        # refined_trajectory/query_texts and generate skills from failures.
         all_failed_trajectories = []
+        all_successful_trajectories = []
 
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
@@ -922,6 +923,11 @@ class RayPPOTrainer:
                 with_skills_mask=test_batch.non_tensor_batch.get("with_skills_mask"),
             )
             all_failed_trajectories.extend(failed_this_batch)
+            successful_this_batch = self._collect_successful_trajectories(
+                input_per_step, output_texts, scores_per_step, batch=test_batch,
+                with_skills_mask=test_batch.non_tensor_batch.get("with_skills_mask"),
+            )
+            all_successful_trajectories.extend(successful_this_batch)
 
             reward_tensor_lst.append(reward_tensor)
             data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
@@ -990,13 +996,14 @@ class RayPPOTrainer:
         # similar failures may be summarized twice, but add_skills deduplicates by content.
         if self.config.env.get('skills_only_memory', {}).get('enable_dynamic_update', False):
             update_source = self.config.env.get('skills_only_memory', {}).get('update_source', 'validation')
-            if update_source in ['validation', 'all'] and all_failed_trajectories:
+            if update_source in ['validation', 'all'] and (all_failed_trajectories or all_successful_trajectories):
                 self._update_skills_from_validation(
                     sample_inputs=sample_inputs,
                     sample_outputs=sample_outputs,
                     sample_scores=sample_scores,
                     success_rate=success_rate,
                     failed_trajectories=all_failed_trajectories,
+                    successful_trajectories=all_successful_trajectories,
                 )
 
         # Skill bank eviction aligned with test_freq (runs only when validation executes);
@@ -1094,6 +1101,7 @@ class RayPPOTrainer:
         sample_scores: list,
         success_rate: dict,
         failed_trajectories: list = None,
+        successful_trajectories: list = None,
     ):
         """
         Update the skill bank from validation outcomes.
@@ -1105,6 +1113,7 @@ class RayPPOTrainer:
         success rate is below threshold.
         """
         update_config = self.config.env.skills_only_memory
+        successful_trajectories = successful_trajectories or []
 
         if failed_trajectories is None:
             threshold = update_config.get('update_threshold', 0.5)
@@ -1129,6 +1138,36 @@ class RayPPOTrainer:
         else:
             print(f"[SkillUpdate] Using {len(failed_trajectories)} pre-collected failed trajectories (refined_trajectory/query_texts) for this val round")
 
+        # Persist failed trajectories to disk (if enabled)
+        save_traj = update_config.get('update_save_traj', False)
+        save_dir = self.config.trainer.get('default_local_dir', './outputs')
+        if save_traj:
+            failed_traj_path = os.path.join(save_dir, f'failed_trajectories_step{self.global_steps}.json')
+            successful_traj_path = os.path.join(save_dir, f'successful_trajectories_step{self.global_steps}.json')
+            try:
+                import json
+                os.makedirs(save_dir, exist_ok=True)
+                
+                # Format trajectories to match the exact payload sent to the LLM.
+                formatted_trajectories = []
+                for traj in failed_trajectories:
+                    formatted_trajectories.append(self._format_failed_trajectory_for_save(traj))
+                
+                with open(failed_traj_path, 'w', encoding='utf-8') as f:
+                    json.dump(formatted_trajectories, f, indent=2, ensure_ascii=False)
+                print(f"[SkillUpdate] Saved {len(formatted_trajectories)} failed trajectories to {failed_traj_path}")
+                formatted_successes = [
+                    self._format_failed_trajectory_for_save(traj)
+                    for traj in successful_trajectories
+                ]
+                with open(successful_traj_path, 'w', encoding='utf-8') as f:
+                    json.dump(formatted_successes, f, indent=2, ensure_ascii=False)
+                print(f"[SkillUpdate] Saved {len(formatted_successes)} successful trajectories to {successful_traj_path}")
+            except Exception as e:
+                print(f"[SkillUpdate] Warning: Failed to save trajectories: {e}")
+                import traceback
+                traceback.print_exc()
+
         if not failed_trajectories:
             print("[SkillUpdate] No failed trajectories found")
             return
@@ -1143,33 +1182,6 @@ class RayPPOTrainer:
         if retrieval_memory is None:
             print("[SkillUpdate] No retrieval_memory found in val_envs")
             return
-
-        # Persist failed trajectories to disk (if enabled)
-        save_traj = update_config.get('update_save_traj', False)
-        save_dir = self.config.trainer.get('default_local_dir', './outputs')
-        if save_traj:
-            failed_traj_path = os.path.join(save_dir, f'failed_trajectories_step{self.global_steps}.json')
-            try:
-                import json
-                os.makedirs(save_dir, exist_ok=True)
-                
-                # Initialize SkillUpdater (if needed) so we can reuse its formatter
-                # with the same configuration as above.
-                if not hasattr(self, 'skill_updater'):
-                    self.skill_updater = SkillUpdater(**skill_updater_kwargs_from_config(update_config))
-
-                # Format trajectories to match the exact payload sent to the LLM.
-                formatted_trajectories = []
-                for traj in failed_trajectories:
-                    formatted_trajectories.append(self._format_failed_trajectory_for_save(traj))
-                
-                with open(failed_traj_path, 'w', encoding='utf-8') as f:
-                    json.dump(formatted_trajectories, f, indent=2, ensure_ascii=False)
-                print(f"[SkillUpdate] Saved {len(formatted_trajectories)} failed trajectories to {failed_traj_path}")
-            except Exception as e:
-                print(f"[SkillUpdate] Warning: Failed to save trajectories: {e}")
-                import traceback
-                traceback.print_exc()
 
         # Analyze failures and generate new skills
         print(
@@ -1650,6 +1662,8 @@ class RayPPOTrainer:
         scores: list,
         batch=None,
         with_skills_mask=None,
+        collect_success: bool = False,
+        max_traj: int = None,
     ) -> list:
         """
         Collect failed trajectories for analysis.
@@ -1662,6 +1676,7 @@ class RayPPOTrainer:
         are not restricted.
         """
         failed = []
+        target_outcome = "successful" if collect_success else "failed"
         
         # If batch is provided, reconstruct full trajectory history like validation does
         if batch is not None and 'traj_uid' in batch.non_tensor_batch:
@@ -1714,6 +1729,7 @@ class RayPPOTrainer:
             query_texts_batch = batch.non_tensor_batch.get('query_text') if batch is not None else None
             model_actions_batch = batch.non_tensor_batch.get('model_actions') if batch is not None else None
             routed_models_batch = batch.non_tensor_batch.get('routed_models') if batch is not None else None
+            api_costs_batch = batch.non_tensor_batch.get('api_costs') if batch is not None else None
             traj_dict = {}
             for idx, (inp, out, score, traj_uid) in enumerate(zip(inputs, outputs, scores, traj_uids)):
                 if traj_uid not in traj_dict:
@@ -1724,6 +1740,7 @@ class RayPPOTrainer:
                         'query_texts': [],
                         'model_actions': [],
                         'routed_models': [],
+                        'api_costs': [],
                         'scores': [],
                         'indices': []
                     }
@@ -1745,6 +1762,11 @@ class RayPPOTrainer:
                     traj_dict[traj_uid]['routed_models'].append(rm if isinstance(rm, str) else str(rm))
                 else:
                     traj_dict[traj_uid]['routed_models'].append("")
+                if api_costs_batch is not None and idx < len(api_costs_batch):
+                    try:
+                        traj_dict[traj_uid]['api_costs'].append(float(api_costs_batch[idx]))
+                    except (TypeError, ValueError):
+                        traj_dict[traj_uid]['api_costs'].append(0.0)
                 traj_dict[traj_uid]['scores'].append(score)
                 traj_dict[traj_uid]['indices'].append(idx)
             
@@ -1763,7 +1785,12 @@ class RayPPOTrainer:
             chosen_traj_info = {}  # traj_uid -> {group_uid, group_success_rate, group_size, group_failed_count}
             has_uid = 'uid' in batch.non_tensor_batch
             print(f"[CollectFailedTraj] batch has 'uid': {has_uid}")
-            if has_uid:
+            if collect_success:
+                traj_uids_to_collect = [
+                    tid for tid, tdata in traj_dict.items()
+                    if not any(s <= 0 for s in tdata['scores'])
+                ]
+            elif has_uid:
                 uids = batch.non_tensor_batch['uid']
                 try:
                     sample_uids = list(np.unique(uids))[:3] if hasattr(np, 'unique') else list(set(uids.ravel().tolist()))[:3]
@@ -1820,7 +1847,7 @@ class RayPPOTrainer:
             _mgr = (self.config.env.get("skills_only_memory") or {}).get("management") or {}
             _enable_mgmt = (self.config.env.get("skills_only_memory") or {}).get("enable_dynamic_management", False)
             _baseline_ab = _enable_mgmt and _mgr.get("baseline_ab_split", False)
-            if _baseline_ab and traj_uid_to_with_skills:
+            if (not collect_success) and _baseline_ab and traj_uid_to_with_skills:
                 n_before = len(traj_uids_to_collect)
                 traj_uids_to_collect = [tid for tid in traj_uids_to_collect if traj_uid_to_with_skills.get(tid, True)]
                 if n_before != len(traj_uids_to_collect):
@@ -1840,12 +1867,31 @@ class RayPPOTrainer:
                     else:
                         dialogue_parts.append(f"\nTurn {turn_idx + 1}: {action}")
                 full_dialogue = "\n".join(dialogue_parts)
+                score_values = []
+                for s in traj_data.get('scores', []):
+                    try:
+                        score_values.append(float(s))
+                    except (TypeError, ValueError):
+                        pass
+                episode_score = score_values[-1] if score_values else 0.0
+                cost_values = []
+                for c in traj_data.get('api_costs', []):
+                    try:
+                        cost_values.append(float(c))
+                    except (TypeError, ValueError):
+                        pass
+                api_cost = max(cost_values) if cost_values else 0.0
                 failed_item = {
                     'task': initial_prompt,
                     'trajectory': [{'action': full_dialogue, 'observation': ''}],
                     'task_type': task_type,
                     'full_dialogue': True,
                     'query_texts': traj_data.get('query_texts', []),
+                    'outcome': 'successful' if episode_score > 0 else 'failed',
+                    'success': bool(episode_score > 0),
+                    'episode_score': episode_score,
+                    'api_cost': api_cost,
+                    'cost': api_cost,
                 }
                 try:
                     from agent_system.memory.trajectory_refinement import build_refined_trajectory
@@ -1925,9 +1971,14 @@ class RayPPOTrainer:
         else:
             # Original logic: process each sample independently (for validation or old format)
             for inp, out, score in zip(inputs, outputs, scores):
-                if score <= 0:  # failed trajectory
+                keep = score > 0 if collect_success else score <= 0
+                if keep:
                     # Try to infer task type
                     task_type = self._detect_task_type_from_input(inp)
+                    try:
+                        episode_score = float(score)
+                    except (TypeError, ValueError):
+                        episode_score = 0.0
                     
                     # Check whether output contains full dialogue history ("Turn" keyword)
                     if "Turn" in out and ("Observation:" in out or "Action:" in out):
@@ -1937,6 +1988,11 @@ class RayPPOTrainer:
                             'trajectory': [{'action': out, 'observation': ''}],  # Full dialogue history is kept in action
                             'task_type': task_type,
                             'full_dialogue': True,  # Mark as full-dialogue format
+                            'outcome': 'successful' if episode_score > 0 else 'failed',
+                            'success': bool(episode_score > 0),
+                            'episode_score': episode_score,
+                            'api_cost': 0.0,
+                            'cost': 0.0,
                         })
                     else:
                         # Legacy single-action format: keep previous behavior with longer truncation.
@@ -1945,12 +2001,38 @@ class RayPPOTrainer:
                             'trajectory': [{'action': out[:2000] if len(out) > 2000 else out, 'observation': ''}],
                             'task_type': task_type,
                             'full_dialogue': False,
+                            'outcome': 'successful' if episode_score > 0 else 'failed',
+                            'success': bool(episode_score > 0),
+                            'episode_score': episode_score,
+                            'api_cost': 0.0,
+                            'cost': 0.0,
                         })
-        max_traj = self.config.env.get('skills_only_memory', {}).get('max_trajectories_for_skill_update', 10)
-        capped = failed[:max_traj]
-        if len(failed) > max_traj:
-            print(f"[CollectFailedTraj] Capped to {max_traj} trajectories (had {len(failed)}); config: max_trajectories_for_skill_update")
+        if max_traj is None and not collect_success:
+            max_traj = self.config.env.get('skills_only_memory', {}).get('max_trajectories_for_skill_update', 10)
+        capped = failed if max_traj is None else failed[:max_traj]
+        if max_traj is not None and len(failed) > max_traj:
+            print(f"[CollectFailedTraj] Capped {target_outcome} trajectories to {max_traj} (had {len(failed)}); config: max_trajectories_for_skill_update")
         return capped
+
+    def _collect_successful_trajectories(
+        self,
+        inputs: list,
+        outputs: list,
+        scores: list,
+        batch=None,
+        with_skills_mask=None,
+        max_traj: int = None,
+    ) -> list:
+        """Collect successful trajectories for persistence without changing skill-update logic."""
+        return self._collect_failed_trajectories(
+            inputs=inputs,
+            outputs=outputs,
+            scores=scores,
+            batch=batch,
+            with_skills_mask=with_skills_mask,
+            collect_success=True,
+            max_traj=max_traj,
+        )
 
     def _detect_task_type_from_input(self, inp: str) -> str:
         """Infer task type from input text."""
@@ -1974,16 +2056,27 @@ class RayPPOTrainer:
         summarizer_query=None,
         error_turn=None,
     ) -> dict:
-        """Build the persisted JSON payload for one failed trajectory."""
+        """Build the persisted JSON payload for one trajectory."""
         formatted_traj = {
             'task': traj['task'],
             'task_type': traj['task_type'],
             'full_dialogue': traj.get('full_dialogue', False),
+            'outcome': traj.get('outcome', 'failed'),
+            'success': bool(traj.get('success', False)),
+            'episode_score': traj.get('episode_score', 0.0),
+            'api_cost': traj.get('api_cost', traj.get('cost', 0.0)),
+            'cost': traj.get('cost', traj.get('api_cost', 0.0)),
         }
         if 'refined_trajectory' in traj:
             formatted_traj['refined_trajectory'] = traj['refined_trajectory']
         if 'detailed_trajectory' in traj:
             formatted_traj['detailed_trajectory'] = traj['detailed_trajectory']
+        if 'success_trajectory' in traj:
+            success_traj = traj.get('success_trajectory')
+            formatted_traj['success_trajectory'] = (
+                self._format_failed_trajectory_for_save(success_traj)
+                if isinstance(success_traj, dict) else success_traj
+            )
         for key in ('traj_uid', 'group_uid', 'group_success_rate', 'group_size', 'group_failed_count'):
             if key in traj:
                 formatted_traj[key] = traj[key]
@@ -1993,42 +2086,36 @@ class RayPPOTrainer:
             formatted_traj['error_turn'] = error_turn
         return formatted_traj
 
-    def _update_skills_from_training_data(self, current_step_failures: list):
+    def _update_skills_from_training_data(
+        self,
+        current_step_failures: list,
+        current_step_successes: list = None,
+    ):
         """
         Update the skill bank using failed trajectories from the current step only.
         Called every training step; uses only the failures just collected this step.
         """
-        if not current_step_failures:
-            print("[SkillUpdate-Train] No failed trajectories from current step, skipping update")
-            return
-
-        trajectories_to_analyze = current_step_failures
         update_config = self.config.env.skills_only_memory
+        current_step_successes = current_step_successes or []
+        trajectories_to_analyze = current_step_failures or []
 
         # Lazy-init SkillUpdater (for external API / local skill service, see skill_updater_kwargs_from_config)
-        if not hasattr(self, 'skill_updater'):
+        if trajectories_to_analyze and not hasattr(self, 'skill_updater'):
             self.skill_updater = SkillUpdater(**skill_updater_kwargs_from_config(update_config))
-
-        # use the training envs' retrieval_memory directly (not via val_envs)
-        retrieval_memory = None
-        if hasattr(self, 'envs') and hasattr(self.envs, 'retrieval_memory'):
-            retrieval_memory = self.envs.retrieval_memory
-        if retrieval_memory is None:
-            print("[SkillUpdate-Train] No retrieval_memory found in training envs")
-            return
 
         # Persist failed trajectories to disk (if enabled)
         save_traj = update_config.get('update_save_traj', False)
         save_dir = self.config.trainer.get('default_local_dir', './outputs')
         if save_traj:
             failed_traj_path = os.path.join(save_dir, f'failed_trajectories_train_step{self.global_steps}.json')
+            successful_traj_path = os.path.join(save_dir, f'successful_trajectories_train_step{self.global_steps}.json')
             try:
                 import json
                 os.makedirs(save_dir, exist_ok=True)
                 print(f"[SkillUpdate-Train] Using {len(trajectories_to_analyze)} trajectories for save/LLM (current step)")
                 
                 # Initialize SkillUpdater (if needed) to reuse its formatting method.
-                if not hasattr(self, 'skill_updater'):
+                if trajectories_to_analyze and not hasattr(self, 'skill_updater'):
                     self.skill_updater = SkillUpdater(**skill_updater_kwargs_from_config(update_config))
                 
                 # Format trajectories to match LLM input payloads.
@@ -2039,10 +2126,29 @@ class RayPPOTrainer:
                 with open(failed_traj_path, 'w', encoding='utf-8') as f:
                     json.dump(formatted_trajectories, f, indent=2, ensure_ascii=False)
                 print(f"[SkillUpdate-Train] Saved {len(formatted_trajectories)} failed trajectories to {failed_traj_path}")
+                formatted_successes = [
+                    self._format_failed_trajectory_for_save(traj)
+                    for traj in current_step_successes
+                ]
+                with open(successful_traj_path, 'w', encoding='utf-8') as f:
+                    json.dump(formatted_successes, f, indent=2, ensure_ascii=False)
+                print(f"[SkillUpdate-Train] Saved {len(formatted_successes)} successful trajectories to {successful_traj_path}")
             except Exception as e:
                 print(f"[SkillUpdate-Train] Warning: Failed to save trajectories: {e}")
                 import traceback
                 traceback.print_exc()
+
+        if not trajectories_to_analyze:
+            print("[SkillUpdate-Train] No failed trajectories from current step, skipping update")
+            return
+
+        # use the training envs' retrieval_memory directly (not via val_envs)
+        retrieval_memory = None
+        if hasattr(self, 'envs') and hasattr(self.envs, 'retrieval_memory'):
+            retrieval_memory = self.envs.retrieval_memory
+        if retrieval_memory is None:
+            print("[SkillUpdate-Train] No retrieval_memory found in training envs")
+            return
 
         print(
             f"[SkillUpdate-Train] Analyzing {len(trajectories_to_analyze)} trajectories (current step) "
@@ -2493,7 +2599,14 @@ class RayPPOTrainer:
                                 _train_inputs, _train_outputs, _train_scores, batch=batch,
                                 with_skills_mask=batch.non_tensor_batch.get("with_skills_mask"),
                             )
-                            self._update_skills_from_training_data(current_step_failures=new_failures)
+                            new_successes = self._collect_successful_trajectories(
+                                _train_inputs, _train_outputs, _train_scores, batch=batch,
+                                with_skills_mask=batch.non_tensor_batch.get("with_skills_mask"),
+                            )
+                            self._update_skills_from_training_data(
+                                current_step_failures=new_failures,
+                                current_step_successes=new_successes,
+                            )
 
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.GiGPO:
                         step_rewards_tensor = core_gigpo.compute_step_discounted_returns(
