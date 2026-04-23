@@ -160,10 +160,19 @@ class TaskRunner:
         else:
             raise NotImplementedError
 
+        reward_kwargs = {
+            "cost_coe": config.reward_model.get("cost_coe", 0.0),
+            "cost_apply_on_nonpositive": config.reward_model.get("cost_apply_on_nonpositive", False),
+            "cost_normalization_window": config.reward_model.get("cost_normalization_window", 1000),
+            "cost_percentile_low": config.reward_model.get("cost_percentile_low", 0.05),
+            "cost_percentile_high": config.reward_model.get("cost_percentile_high", 0.95),
+            "cost_transform": config.reward_model.get("cost_transform", "sqrt"),
+        }
         reward_fn = reward_manager_cls(
             tokenizer=tokenizer,
             num_examine=0,
             normalize_by_length=False,
+            **reward_kwargs,
         )
 
         # Note that we always use function-based RM for validation
@@ -171,6 +180,7 @@ class TaskRunner:
             tokenizer=tokenizer,
             num_examine=1,
             normalize_by_length=False,
+            **reward_kwargs,
         )
 
         resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)

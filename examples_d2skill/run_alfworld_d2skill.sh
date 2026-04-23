@@ -38,6 +38,7 @@ num_cpus_per_env_worker=0.1
 train_data_size=16
 val_data_size=16
 group_size=8
+cost_coe="${COST_COE:-0.0}"
 
 # ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-4B-Instruct-2507"
 ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/public/Models/Qwen/Qwen2.5-7B-Instruct"
@@ -84,6 +85,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.use_invalid_action_penalty=True \
     actor_rollout_ref.actor.invalid_action_penalty_coef=1.0 \
+    reward_model.cost_coe=$cost_coe \
     algorithm.use_kl_in_reward=False \
     env.env_name=alfworld/AlfredTWEnv \
     env.seed=0 \
@@ -141,10 +143,3 @@ python3 -m verl.trainer.main_ppo \
     +api_key="empty" \
     "$@" \
     2>&1 | tee run_alfworld_skills_management.log
-    
-    
-    
-    
-    
-    
-    

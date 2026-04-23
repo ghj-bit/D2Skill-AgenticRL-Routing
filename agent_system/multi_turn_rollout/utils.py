@@ -139,6 +139,7 @@ def filter_group_data(batch_list : List[Dict],
                         config,
                         last_try: bool = False,
                         with_skills_per_traj: Optional[np.ndarray] = None,
+                        api_costs: Optional[np.ndarray] = None,
                         ):
     """
     Dynamic Sampling:
@@ -146,7 +147,7 @@ def filter_group_data(batch_list : List[Dict],
     Adopted from DAPO (https://arxiv.org/abs/2503.14476)
     """
     if last_try:
-        return batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, with_skills_per_traj
+        return batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, with_skills_per_traj, api_costs
     
     batch_size = config.data.train_batch_size
     group_n = config.env.rollout.n
@@ -183,6 +184,7 @@ def filter_group_data(batch_list : List[Dict],
     tool_callings = tool_callings[keep_indices]
     if with_skills_per_traj is not None:
         with_skills_per_traj = np.asarray(with_skills_per_traj)[keep_indices]
+    if api_costs is not None:
+        api_costs = np.asarray(api_costs)[keep_indices]
 
-    return batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, with_skills_per_traj
-
+    return batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, with_skills_per_traj, api_costs

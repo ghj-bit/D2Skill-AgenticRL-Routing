@@ -223,6 +223,15 @@ reward_model:
   use_dynamic_bsz: ${critic.use_dynamic_bsz}
   forward_max_token_len_per_gpu: ${critic.forward_max_token_len_per_gpu}
   reward_manager: episode
+  # Router-R1-style cost-aware reward:
+  # final_reward = base_reward * (1 - cost_coe) + normalized_low_cost_reward * cost_coe
+  # By default only positive base rewards receive the cost term, so cheap failed trajectories are not encouraged.
+  cost_coe: 0.0
+  cost_apply_on_nonpositive: False
+  cost_normalization_window: 1000
+  cost_percentile_low: 0.05
+  cost_percentile_high: 0.95
+  cost_transform: sqrt
   launch_reward_fn_async: False # custom reward function executed async on CPU, during log_prob
   sandbox_fusion:
     url: null # faas url to run code in cloud sandbox

@@ -194,6 +194,13 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             }
         ),
     }
+    for key in ["base_episode_rewards", "api_costs", "cost_rewards", "final_rewards"]:
+        if key in batch.non_tensor_batch:
+            values = np.asarray(batch.non_tensor_batch[key], dtype=np.float32).reshape(-1)
+            if values.size > 0:
+                metrics[f"episode/{key}/mean"] = float(np.mean(values))
+                metrics[f"episode/{key}/max"] = float(np.max(values))
+                metrics[f"episode/{key}/min"] = float(np.min(values))
     return metrics
 
 

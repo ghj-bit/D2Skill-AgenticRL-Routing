@@ -282,6 +282,7 @@ class TrajectoryCollector:
             success: Dict[str, np.ndarray],
             traj_uid: np.ndarray,
             tool_callings: np.ndarray,
+            api_costs: Optional[np.ndarray] = None,
             per_step_retrieved: Optional[List[List[Dict]]] = None,
             envs: Optional[Any] = None,
             enable_dynamic_management: bool = False,
@@ -297,10 +298,15 @@ class TrajectoryCollector:
             success (Dict[str, np.ndarray]): Success samples for each environment
             traj_uid (np.ndarray): Trajectory unique identifiers
             tool_callings (np.ndarray): Number of tool callings for each environment
+            api_costs (np.ndarray): Accumulated external routing API costs for each environment
         Returns:
             DataProto: Collected and organized trajectory data
         """
         batch_size = len(total_batch_list)
+        if api_costs is None:
+            api_costs = np.zeros(batch_size, dtype=np.float32)
+        else:
+            api_costs = np.asarray(api_costs, dtype=np.float32).ravel()
 
         wsm_arr = with_skills_per_traj
         if wsm_arr is None and envs is not None:
@@ -344,6 +350,7 @@ class TrajectoryCollector:
                     data['episode_lengths'] = episode_lengths[bs]
                     # tool_callings
                     data['tool_callings'] = tool_callings[bs]
+                    data['api_costs'] = api_costs[bs]
                     # success_rate
                     for key, value in success_rate.items():
                         data[key] = value
@@ -451,6 +458,7 @@ class TrajectoryCollector:
         episode_lengths = np.zeros(batch_size, dtype=np.float32)
         episode_rewards = np.zeros(batch_size, dtype=np.float32)
         tool_callings = np.zeros(batch_size, dtype=np.float32)
+        api_costs = np.zeros(batch_size, dtype=np.float32)
         # route_obs = obs
         # original_obs = obs
         # print(f"obs:{obs}")
@@ -521,9 +529,11 @@ class TrajectoryCollector:
             # episode_rewards += torch_to_numpy(rewards) * torch_to_numpy(active_masks)
             episode_rewards[active_masks] += torch_to_numpy(rewards)[active_masks]
             episode_lengths[active_masks] += 1
+            api_costs[active_masks] += np.asarray(cur_completion_tokens, dtype=np.float32)[active_masks]
 
             assert len(rewards) == batch_size, f"env should return rewards for all environments, got {len(rewards)} rewards for {batch_size} environments"
             batch.non_tensor_batch['rewards'] = torch_to_numpy(rewards, is_object=True)
+            batch.non_tensor_batch['api_costs'] = api_costs.copy()
             batch.non_tensor_batch['active_masks'] = torch_to_numpy(active_masks, is_object=True)
             # Update episode lengths for active environments
             batch_list: list[dict] = to_list_of_dict(batch)
@@ -552,7 +562,7 @@ class TrajectoryCollector:
         if wsm_traj is not None:
             wsm_traj = np.asarray(wsm_traj, dtype=bool).copy()
 
-        return total_batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, per_step_retrieved, wsm_traj
+        return total_batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, api_costs, per_step_retrieved, wsm_traj
     
     def dynamic_multi_turn_loop(
             self,
@@ -583,6 +593,7 @@ class TrajectoryCollector:
         total_success = []
         total_traj_uid = []
         total_tool_callings = []
+        total_api_costs = []
         total_wsm_chunks: List[np.ndarray] = []
         try_count: int = 0
         max_try_count = self.config.algorithm.filter_groups.max_num_gen_batches
@@ -593,12 +604,12 @@ class TrajectoryCollector:
                 print(f"valid num={len(total_batch_list)} < target num={self.config.data.train_batch_size * self.config.env.rollout.n}. Keep generating... ({try_count}/{max_try_count})")
             try_count += 1
 
-            batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, _, wsm_traj = self.vanilla_multi_turn_loop(
+            batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, api_costs, _, wsm_traj = self.vanilla_multi_turn_loop(
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
                 envs=envs,
             )
-            batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, wsm_traj = filter_group_data(batch_list=batch_list, 
+            batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, wsm_traj, api_costs = filter_group_data(batch_list=batch_list,
                                                                                                 episode_rewards=episode_rewards, 
                                                                                                 episode_lengths=episode_lengths, 
                                                                                                 success=success, 
@@ -607,6 +618,7 @@ class TrajectoryCollector:
                                                                                                 config=self.config,
                                                                                                 last_try=(try_count == max_try_count),
                                                                                                 with_skills_per_traj=wsm_traj,
+                                                                                                api_costs=api_costs,
                                                                                                 )
             
             total_batch_list += batch_list
@@ -615,6 +627,7 @@ class TrajectoryCollector:
             total_success.append(success)
             total_traj_uid.append(traj_uid)
             total_tool_callings.append(tool_callings)
+            total_api_costs.append(api_costs)
             if wsm_traj is not None:
                 total_wsm_chunks.append(np.asarray(wsm_traj, dtype=bool))
 
@@ -623,9 +636,10 @@ class TrajectoryCollector:
         total_success = {key: np.concatenate([success[key] for success in total_success], axis=0) for key in total_success[0].keys()}
         total_traj_uid = np.concatenate(total_traj_uid, axis=0)
         total_tool_callings = np.concatenate(total_tool_callings, axis=0)
+        total_api_costs = np.concatenate(total_api_costs, axis=0)
         total_wsm = np.concatenate(total_wsm_chunks, axis=0) if total_wsm_chunks else None
 
-        return total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, total_tool_callings, total_wsm
+        return total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, total_tool_callings, total_api_costs, total_wsm
 
     def multi_turn_loop(
             self,
@@ -654,7 +668,7 @@ class TrajectoryCollector:
         total_wsm: Optional[np.ndarray] = None
         if self.config.algorithm.filter_groups.enable and is_train:
             # Dynamic Sampling (for DAPO and Dynamic GiGPO)
-            total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, totoal_tool_callings, total_wsm = \
+            total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, totoal_tool_callings, total_api_costs, total_wsm = \
                 self.dynamic_multi_turn_loop(
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
@@ -663,7 +677,7 @@ class TrajectoryCollector:
             per_step_retrieved = None
         else:
             # Vanilla Sampling   
-            total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, totoal_tool_callings, per_step_retrieved, total_wsm = \
+            total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, totoal_tool_callings, total_api_costs, per_step_retrieved, total_wsm = \
                 self.vanilla_multi_turn_loop(
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
@@ -673,6 +687,7 @@ class TrajectoryCollector:
         assert len(total_batch_list) == len(total_episode_lengths)
         assert len(total_batch_list) == len(total_traj_uid)
         assert len(total_batch_list) == len(totoal_tool_callings)
+        assert len(total_batch_list) == len(total_api_costs)
         
 
         # Create trajectory data
@@ -685,6 +700,7 @@ class TrajectoryCollector:
             success=total_success,
             traj_uid=total_traj_uid,
             tool_callings=totoal_tool_callings,
+            api_costs=total_api_costs,
             per_step_retrieved=per_step_retrieved,
             envs=envs,
             enable_dynamic_management=enable_dynamic_management,
