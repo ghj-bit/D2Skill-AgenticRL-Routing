@@ -216,13 +216,16 @@ def _has_think_block(text: str) -> bool:
 
 
 def _extract_action_from_output(text: str) -> str:
-    """Extract the last non-empty <action>...</action> block from model raw output."""
+    """Extract action text, preferring <action>...</action> over [action]...[/action]."""
     if not text:
         return ""
     matches = re.findall(r'<action>\s*(.*?)\s*</action>', text, re.DOTALL | re.IGNORECASE)
-    if not matches:
-        return ""
-    return matches[-1].strip()
+    if matches:
+        return matches[-1].strip()
+    bracket_matches = re.findall(r'\[action\]\s*(.*?)\s*\[/action\]', text, re.DOTALL | re.IGNORECASE)
+    if bracket_matches:
+        return bracket_matches[-1].strip()
+    return ""
 
 
 def apply_invalid_action_penalty(
@@ -1858,6 +1861,20 @@ class RayPPOTrainer:
                 task_type = self._detect_task_type_from_input(initial_prompt)
                 task_short = None
                 obs_list = None
+
+                def extract_task_from_first_observation(observations):
+                    if not observations:
+                        return ""
+                    first_obs = observations[0]
+                    if first_obs is None:
+                        return ""
+                    if not isinstance(first_obs, str):
+                        first_obs = str(first_obs)
+                    match = re.search(r"Your task is to:\s*(.*?)(?:\n\n|$)", first_obs, re.DOTALL)
+                    if not match:
+                        return ""
+                    return match.group(1).strip()
+
                 dialogue_parts = [f"Initial Prompt: {initial_prompt}"]
                 for turn_idx, (obs, action) in enumerate(zip(traj_data['observations'], traj_data['outputs'])):
                     if obs.strip():
@@ -1934,8 +1951,9 @@ class RayPPOTrainer:
                 routed_models = traj_data.get('routed_models', [])
                 turn_count = max(len(obs_list), len(router_actions), len(raw_outputs), len(routed_models))
                 if turn_count > 0:
+                    detailed_task = extract_task_from_first_observation(obs_list) or task_short or initial_prompt
                     failed_item['detailed_trajectory'] = {
-                        'task': task_short or initial_prompt,
+                        'task': detailed_task,
                         'turns': [
                             {
                                 'observation': obs_list[i] if i < len(obs_list) else "",

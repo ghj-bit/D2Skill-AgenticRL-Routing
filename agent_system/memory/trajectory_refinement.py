@@ -41,13 +41,16 @@ def extract_task_short(first_input: str) -> str:
 
 
 def extract_action_from_output(raw_output: str) -> str:
-    """Extract the last non-empty <action>...</action> block from model raw output."""
+    """Extract action text, preferring <action>...</action> over [action]...[/action]."""
     if not raw_output or not isinstance(raw_output, str):
         return ""
     matches = re.findall(r"<action>\s*(.*?)\s*</action>", raw_output, re.DOTALL | re.IGNORECASE)
-    if not matches:
-        return ""
-    return matches[-1].strip()
+    if matches:
+        return matches[-1].strip()
+    bracket_matches = re.findall(r"\[action\]\s*(.*?)\s*\[/action\]", raw_output, re.DOTALL | re.IGNORECASE)
+    if bracket_matches:
+        return bracket_matches[-1].strip()
+    return ""
 
 
 def build_refined_trajectory(
