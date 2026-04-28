@@ -66,6 +66,7 @@ from gigpo import core_gigpo
 
 from agent_system.multi_turn_rollout import TrajectoryCollector, adjust_batch
 from agent_system.memory.skill_updater import SkillUpdater, skill_updater_kwargs_from_config
+from routing.models_config.models_config import MODEL_CONF
 
 WorkerType = Type[Worker]
 
@@ -1731,7 +1732,6 @@ class RayPPOTrainer:
             # Group by traj_uid to reconstruct full trajectories (include query_text per step for retrieval_obs)
             query_texts_batch = batch.non_tensor_batch.get('query_text') if batch is not None else None
             model_actions_batch = batch.non_tensor_batch.get('model_actions') if batch is not None else None
-            routed_models_batch = batch.non_tensor_batch.get('routed_models') if batch is not None else None
             api_costs_batch = batch.non_tensor_batch.get('api_costs') if batch is not None else None
             traj_dict = {}
             for idx, (inp, out, score, traj_uid) in enumerate(zip(inputs, outputs, scores, traj_uids)):
@@ -1742,7 +1742,6 @@ class RayPPOTrainer:
                         'observations': [],
                         'query_texts': [],
                         'model_actions': [],
-                        'routed_models': [],
                         'api_costs': [],
                         'scores': [],
                         'indices': []
@@ -1760,11 +1759,6 @@ class RayPPOTrainer:
                     traj_dict[traj_uid]['model_actions'].append(ma if isinstance(ma, str) else str(ma))
                 else:
                     traj_dict[traj_uid]['model_actions'].append("")
-                if routed_models_batch is not None and idx < len(routed_models_batch):
-                    rm = routed_models_batch[idx]
-                    traj_dict[traj_uid]['routed_models'].append(rm if isinstance(rm, str) else str(rm))
-                else:
-                    traj_dict[traj_uid]['routed_models'].append("")
                 if api_costs_batch is not None and idx < len(api_costs_batch):
                     try:
                         traj_dict[traj_uid]['api_costs'].append(float(api_costs_batch[idx]))
@@ -1939,7 +1933,6 @@ class RayPPOTrainer:
                             obs_list,
                             traj_data['outputs'],
                             traj_data.get('model_actions', []),
-                            traj_data.get('routed_models', []),
                         )
                         failed_item['refined_trajectory'] = refined
                 except Exception as e:
@@ -1948,8 +1941,7 @@ class RayPPOTrainer:
                     obs_list = traj_data.get('observations', [])
                 router_actions = traj_data.get('outputs', [])
                 raw_outputs = traj_data.get('model_actions', [])
-                routed_models = traj_data.get('routed_models', [])
-                turn_count = max(len(obs_list), len(router_actions), len(raw_outputs), len(routed_models))
+                turn_count = max(len(obs_list), len(router_actions), len(raw_outputs))
                 if turn_count > 0:
                     detailed_task = extract_task_from_first_observation(obs_list) or task_short or initial_prompt
                     failed_item['detailed_trajectory'] = {
@@ -1960,7 +1952,6 @@ class RayPPOTrainer:
                                 'router_action': router_actions[i] if i < len(router_actions) else "",
                                 'raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
                                 'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
-                                'routed_model': routed_models[i] if i < len(routed_models) else "",
                             }
                             for i in range(turn_count)
                         ],
@@ -2103,6 +2094,107 @@ class RayPPOTrainer:
         if error_turn is not None:
             formatted_traj['error_turn'] = error_turn
         return formatted_traj
+
+    def _save_training_model_call_stats_from_batch(self, batch) -> None:
+        """Save model call statistics for every trajectory in the current train rollout."""
+        nt = getattr(batch, 'non_tensor_batch', None) or {}
+        traj_uids = nt.get('traj_uid')
+        called_models = nt.get('called_models')
+        if traj_uids is None or called_models is None:
+            return
+
+        model_names = list(MODEL_CONF.keys())
+        episode_rewards = nt.get('episode_rewards')
+        success_per_traj = nt.get('success_per_traj')
+
+        traj_stats = {}
+        for idx, traj_uid in enumerate(traj_uids):
+            traj_uid = str(traj_uid)
+            if traj_uid not in traj_stats:
+                traj_stats[traj_uid] = {
+                    'traj_uid': traj_uid,
+                    'model_call_counts': {model_name: 0 for model_name in model_names},
+                    'total_model_calls': 0,
+                    'episode_score': 0.0,
+                    'success': False,
+                }
+
+            if success_per_traj is not None and idx < len(success_per_traj):
+                score = success_per_traj[idx]
+            elif episode_rewards is not None and idx < len(episode_rewards):
+                score = episode_rewards[idx]
+            else:
+                score = 0.0
+            try:
+                score = float(score)
+            except (TypeError, ValueError):
+                score = 0.0
+            traj_stats[traj_uid]['episode_score'] = score
+            traj_stats[traj_uid]['success'] = score > 0
+
+            called_model = called_models[idx] if idx < len(called_models) else ''
+            if not called_model:
+                continue
+            called_model = str(called_model).strip()
+            if called_model not in MODEL_CONF:
+                continue
+            traj_stats[traj_uid]['model_call_counts'][called_model] += 1
+            traj_stats[traj_uid]['total_model_calls'] += 1
+
+        failed_trajectories = []
+        successful_trajectories = []
+        for item in traj_stats.values():
+            item['outcome'] = 'successful' if item['success'] else 'failed'
+            if item['success']:
+                successful_trajectories.append(item)
+            else:
+                failed_trajectories.append(item)
+
+        def summarize(items: list) -> dict:
+            totals = {model_name: 0 for model_name in model_names}
+            total_calls = 0
+            for item in items:
+                total_calls += int(item['total_model_calls'])
+                for model_name, count in item['model_call_counts'].items():
+                    totals[model_name] = totals.get(model_name, 0) + int(count)
+            num_trajectories = len(items)
+            return {
+                'num_trajectories': num_trajectories,
+                'total_model_call_counts': totals,
+                'total_model_calls': total_calls,
+                'average_total_model_calls_per_trajectory': total_calls / num_trajectories if num_trajectories else 0.0,
+                'average_model_call_counts_per_trajectory': {
+                    model_name: totals.get(model_name, 0) / num_trajectories if num_trajectories else 0.0
+                    for model_name in model_names
+                },
+                'per_trajectory': items,
+            }
+
+        failed_stats = summarize(failed_trajectories)
+        successful_stats = summarize(successful_trajectories)
+        all_items = failed_trajectories + successful_trajectories
+        overall_stats = summarize(all_items)
+        overall_stats.pop('per_trajectory', None)
+        stats = {
+            'step': int(self.global_steps),
+            'model_names_from_models_config': model_names,
+            'failed': failed_stats,
+            'successful': successful_stats,
+            'overall': overall_stats,
+        }
+
+        save_dir = self.config.trainer.get('default_local_dir', './outputs')
+        try:
+            os.makedirs(save_dir, exist_ok=True)
+            stats_path = os.path.join(save_dir, f'model_call_stats_train_step{self.global_steps}.json')
+            with open(stats_path, 'w', encoding='utf-8') as f:
+                json.dump(stats, f, indent=2, ensure_ascii=False)
+            print(
+                f"[ModelCallStats-Train] Saved model call stats for "
+                f"{stats['overall']['num_trajectories']} trajectories to {stats_path}"
+            )
+        except Exception as e:
+            print(f"[ModelCallStats-Train] Warning: Failed to save model call stats: {e}")
 
     def _update_skills_from_training_data(
         self,
@@ -2604,6 +2696,7 @@ class RayPPOTrainer:
                     # batch = batch.union(gen_batch_output)
                     del batch
                     batch = gen_batch_output
+                    self._save_training_model_call_stats_from_batch(batch)
 
                     if self.config.env.get('skills_only_memory', {}).get('enable_dynamic_update', False):
                         update_source = self.config.env.get('skills_only_memory', {}).get('update_source', 'validation')

@@ -148,7 +148,7 @@ def request_task(data):
     q_id, query_text, TAU, LLM_NAME, api_base, api_key = data
     if LLM_NAME == "":
         print("LLM Name Error")
-        return q_id, "LLM Name Error", 0.0
+        return q_id, "LLM Name Error", 0.0, ""
     # print(LLM_NAME)
     try:
         print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}')
@@ -164,7 +164,7 @@ def request_task(data):
         single_response = "API Request Error"
         completion_tokens = 0.0
 
-    return q_id, single_response, int(completion_tokens) * API_PRICE_1M_TOKENS[LLM_NAME]
+    return q_id, single_response, int(completion_tokens) * API_PRICE_1M_TOKENS[LLM_NAME], LLM_NAME
 
 
 def check_llm_name(target_llm):
@@ -242,8 +242,14 @@ def access_routing_pool(queries, api_base, api_key):
     ret.sort(key=lambda x: x[0], reverse=False)
     resp = []
     completion_tokens_list = []
-    for _, response, completion_tokens in ret:
+    called_model_names = []
+    for _, response, completion_tokens, called_model_name in ret:
         resp.append(response)
         completion_tokens_list.append(completion_tokens)
+        called_model_names.append(called_model_name)
 
-    return {"result": resp, "completion_tokens_list": completion_tokens_list}
+    return {
+        "result": resp,
+        "completion_tokens_list": completion_tokens_list,
+        "called_model_names": called_model_names,
+    }

@@ -501,7 +501,7 @@ class TrajectoryCollector:
             )
             batch.non_tensor_batch['router_actions'] = np.array(route_actions_str, dtype=object)
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
-            batch.non_tensor_batch['routed_models'] = np.array(models, dtype=object)
+            batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
             # print(f"路由模型执行动作：{text_model_actions}")
             next_obs, next_route_obs, rewards, dones, infos = envs.step(text_model_actions, models)
 
@@ -757,12 +757,14 @@ class TrajectoryCollector:
             ]
         }
         if do_route:
-            route_results, completion_tokens_list = self.batch_route(route_queries)
+            route_results, completion_tokens_list, called_model_names = self.batch_route(route_queries)
             assert len(route_results) == sum([1 for action in cur_actions if action == 'search'])
             assert len(route_results) == len(completion_tokens_list)
+            assert len(route_results) == len(called_model_names)
         else:
             route_results = [''] * sum([1 for action in cur_actions if action == 'search'])
             completion_tokens_list = [0.0] * sum([1 for action in cur_actions if action == 'search'])
+            called_model_names = [''] * sum([1 for action in cur_actions if action == 'search'])
 
         for i, (action, content, active) in enumerate(zip(cur_actions, contents, active_mask)):
             # if not active:
@@ -783,6 +785,7 @@ class TrajectoryCollector:
                 #     is_route.append(0)
                 #     cur_completion_tokens.append(0.0)
                 if action == 'search':
+                    called_model_name = called_model_names.pop(0)
                     if route_results[0].strip().lower() == "llm name error":
                         next_obs.append(f'\n\n<information>None</information>\n\n')
                         model_actions.append('')
@@ -794,13 +797,13 @@ class TrajectoryCollector:
                         model_actions.append('')
                         route_results.pop(0)
                         valid_action.append(0)
-                        models.append('')
+                        models.append(called_model_name)
                     else:
                         model_resp = route_results.pop(0).strip()
                         next_obs.append(f'\n\n<information>{model_resp}</information>\n\n')
                         model_actions.append(model_resp)
                         valid_action.append(1)
-                        models.append((forced_route_model or content).strip().lower())
+                        models.append(called_model_name)
                     dones.append(0)
                     is_route.append(1)
                     cur_completion_tokens.append(completion_tokens_list.pop(0))
@@ -814,8 +817,10 @@ class TrajectoryCollector:
                     cur_completion_tokens.append(0.0)
         print(f'len(route_results): {len(route_results)}')
         print(f'len(completion_tokens_list): {len(completion_tokens_list)}')
+        print(f'len(called_model_names): {len(called_model_names)}')
         assert len(route_results) == 0
         assert len(completion_tokens_list) == 0
+        assert len(called_model_names) == 0
         # models = cur_actions
         return next_obs, dones, valid_action, is_route, cur_completion_tokens, model_actions, models
 
@@ -870,4 +875,4 @@ class TrajectoryCollector:
     def batch_route(self, queries: Dict = None) -> str:
         ret = access_routing_pool(queries=queries, api_base=self.config.api_base, api_key=self.config.api_key)
         
-        return ret['result'], ret["completion_tokens_list"]
+        return ret['result'], ret["completion_tokens_list"], ret.get("called_model_names", [])

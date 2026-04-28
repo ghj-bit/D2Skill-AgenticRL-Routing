@@ -38,7 +38,7 @@ num_cpus_per_env_worker=0.1
 train_data_size=16
 val_data_size=16
 group_size=8
-cost_coe="${COST_COE:-0.5}"
+cost_coe="${COST_COE:-0.0}"
 
 # ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-4B-Instruct-2507"
 ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/public/Models/Qwen/Qwen2.5-7B-Instruct"
