@@ -728,6 +728,63 @@ class RayPPOTrainer:
             if k not in ("summarizer_queries", "raw_responses")
         }
 
+    def _record_step_window_summary(self, metrics: dict) -> None:
+        """Write aggregate metrics for the latest diagnostic dump interval."""
+        interval = int(self.config.trainer.get("step_file_dump_interval", 5) or 0)
+        if interval <= 0:
+            interval = 1
+
+        numeric_metrics = {}
+        for key, value in metrics.items():
+            if isinstance(value, (int, float, np.integer, np.floating, np.bool_)):
+                numeric_metrics[key] = float(value)
+
+        if not hasattr(self, "_step_metrics_window"):
+            self._step_metrics_window = []
+        self._step_metrics_window.append({"step": int(self.global_steps), "metrics": numeric_metrics})
+        if len(self._step_metrics_window) > interval:
+            self._step_metrics_window = self._step_metrics_window[-interval:]
+        if not self._should_dump_step_file():
+            return
+
+        window = list(self._step_metrics_window)
+        if not window:
+            return
+
+        keys = sorted({key for item in window for key in item["metrics"]})
+        summary = {}
+        for key in keys:
+            values = np.asarray(
+                [item["metrics"][key] for item in window if key in item["metrics"]],
+                dtype=np.float64,
+            )
+            values = values[np.isfinite(values)]
+            if values.size == 0:
+                continue
+            summary[key] = {
+                "mean": float(np.mean(values)),
+                "min": float(np.min(values)),
+                "max": float(np.max(values)),
+                "latest": float(values[-1]),
+                "count": int(values.size),
+            }
+
+        save_dir = self.config.trainer.get("default_local_dir", "./outputs")
+        os.makedirs(save_dir, exist_ok=True)
+        path = os.path.join(save_dir, f"step_window_summary_train_step{self.global_steps}.json")
+        payload = {
+            "phase": "train",
+            "step": int(self.global_steps),
+            "window_size": int(len(window)),
+            "configured_interval": int(interval),
+            "step_start": int(window[0]["step"]),
+            "step_end": int(window[-1]["step"]),
+            "metrics": summary,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        print(f"[StepWindowSummary] Wrote {len(summary)} metric summaries to {path}")
+
     def _maybe_log_val_generations(self, inputs, outputs, scores):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
 
@@ -2958,6 +3015,8 @@ class RayPPOTrainer:
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
                 metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+
+                self._record_step_window_summary(metrics)
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)

@@ -462,7 +462,6 @@ class TrajectoryCollector:
         api_costs = np.zeros(batch_size, dtype=np.float32)
         # route_obs = obs
         # original_obs = obs
-        # print(f"obs:{obs}")
         # Trajectory collection loop
         for _step in range(self.config.env.max_steps):
             active_masks = np.logical_not(is_done)
