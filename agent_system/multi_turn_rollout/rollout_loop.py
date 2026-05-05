@@ -378,14 +378,15 @@ class TrajectoryCollector:
                 _ps_store[_ii] = list(per_step_retrieved[_ii])
             gen_batch_output.non_tensor_batch["per_step_retrieved_for_record"] = _ps_store
 
+        traj_idx = np.asarray(gen_batch_output.non_tensor_batch.get("traj_index")).ravel().astype(np.int64)
+        if success and "success_rate" in success:
+            st = np.asarray(success["success_rate"])
+            gen_batch_output.non_tensor_batch["success_per_traj"] = st[traj_idx]
+
         # When dynamic management is on: add trajectory-derived keys **expanded to row-level**
         # so adjust_batch (select_idxs + concat) and balance_batch never see length mismatch.
         if enable_dynamic_management:
-            traj_idx = np.asarray(gen_batch_output.non_tensor_batch.get("traj_index")).ravel().astype(np.int64)
             num_rows = len(traj_idx)
-            if success and "success_rate" in success:
-                st = np.asarray(success["success_rate"])
-                gen_batch_output.non_tensor_batch["success_per_traj"] = st[traj_idx]
             if wsm_arr is not None and wsm_arr.shape[0] == batch_size:
                 gen_batch_output.non_tensor_batch["with_skills_mask"] = wsm_arr[traj_idx]
             if per_step_retrieved is not None:

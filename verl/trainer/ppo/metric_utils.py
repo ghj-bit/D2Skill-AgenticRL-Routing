@@ -76,6 +76,43 @@ def _compute_response_info(batch: DataProto) -> Dict[str, Any]:
     )
 
 
+def compute_model_call_metrics(non_tensor_batch: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+    """Compute per-trajectory average call count for each routed model."""
+    traj_uids = non_tensor_batch.get("traj_uid")
+    called_models = non_tensor_batch.get("called_models")
+    if traj_uids is None or called_models is None:
+        return {}
+
+    traj_uids = np.asarray(traj_uids).ravel()
+    called_models = np.asarray(called_models, dtype=object).ravel()
+    if traj_uids.size == 0:
+        return {}
+
+    num_trajs = len(np.unique(traj_uids))
+    if num_trajs == 0:
+        return {}
+
+    totals = defaultdict(int)
+    for model in called_models[: traj_uids.size]:
+        model_name = str(model).strip()
+        if model_name:
+            totals[model_name] += 1
+
+    try:
+        from routing.models_config.models_config import MODEL_CONF
+        model_names = list(MODEL_CONF.keys())
+    except Exception:
+        model_names = []
+    model_names.extend(name for name in totals.keys() if name not in model_names)
+
+    metrics = {
+        f"{prefix}/model_call/{model_name}/mean": float(totals.get(model_name, 0) / num_trajs)
+        for model_name in model_names
+    }
+    metrics[f"{prefix}/model_call/total/mean"] = float(sum(totals.values()) / num_trajs)
+    return metrics
+
+
 def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str, Any]:
     """
     Computes various metrics from a batch of data for PPO training.
@@ -119,6 +156,13 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
     valid_adv = torch.masked_select(advantages, response_mask)
     valid_returns = torch.masked_select(returns, response_mask)
     unique_traj_uid, unique_idx = np.unique(batch.non_tensor_batch['traj_uid'], return_index=True)
+    episode_lengths = np.asarray(batch.non_tensor_batch["episode_lengths"])[unique_idx]
+    if "success_per_traj" in batch.non_tensor_batch:
+        success_values = np.asarray(batch.non_tensor_batch["success_per_traj"])[unique_idx]
+    else:
+        success_values = np.asarray(batch.non_tensor_batch["episode_rewards"])[unique_idx]
+    success_mask = np.asarray(success_values, dtype=np.float32) > 0
+    success_lengths = np.asarray(episode_lengths, dtype=np.float32)[success_mask]
 
     if use_critic:
         values = batch.batch["values"]
@@ -178,6 +222,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             batch.non_tensor_batch["episode_lengths"][unique_idx].max().item(),
         "episode/length/min": 
             batch.non_tensor_batch["episode_lengths"][unique_idx].min().item(),
+        "episode/success_length/mean":
+            float(np.mean(success_lengths)) if success_lengths.size > 0 else 0.0,
+        "episode/success_length/count":
+            int(success_lengths.size),
         "episode/tool_call_count/mean": 
             batch.non_tensor_batch["tool_callings"][unique_idx].mean().item(),
         # "episode/tool_call_count/max":
@@ -201,6 +249,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
                 metrics[f"episode/{key}/mean"] = float(np.mean(values))
                 metrics[f"episode/{key}/max"] = float(np.max(values))
                 metrics[f"episode/{key}/min"] = float(np.min(values))
+    metrics.update(compute_model_call_metrics(batch.non_tensor_batch, prefix="episode"))
     return metrics
 
 

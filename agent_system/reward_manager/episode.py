@@ -72,6 +72,18 @@ class EpisodeRewardManager:
         scaled = (processed - cost_min) / denom
         return 1.0 - float(np.clip(scaled, 0.0, 1.0))
 
+    def _episode_success_reward(self, data_item) -> float:
+        """Return binary episode outcome reward: success=1, failure=0."""
+        if "success_per_traj" in data_item.non_tensor_batch:
+            success = float(data_item.non_tensor_batch["success_per_traj"])
+            return 1.0 if success > 0.0 else 0.0
+
+        episode_rewards = float(data_item.non_tensor_batch["episode_rewards"])
+        if self.normalize_by_length:
+            episode_lengths = float(data_item.non_tensor_batch["episode_lengths"])
+            episode_rewards = episode_rewards / max(episode_lengths, 1.0)
+        return 1.0 if episode_rewards > 0.0 else 0.0
+
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
 
@@ -121,13 +133,7 @@ class EpisodeRewardManager:
                 image_grid_thw = multi_modal_inputs['image_grid_thw']
 
 
-            episode_rewards = data_item.non_tensor_batch['episode_rewards']
-            episode_lengths = data_item.non_tensor_batch['episode_lengths']
-
-            if self.normalize_by_length:
-                base_score = episode_rewards / episode_lengths
-            else:
-                base_score = episode_rewards
+            base_score = self._episode_success_reward(data_item)
             api_cost = float(data_item.non_tensor_batch.get('api_costs', 0.0))
             cost_reward = self._normalize_cost_reward(api_cost)
             if self.cost_coe > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):

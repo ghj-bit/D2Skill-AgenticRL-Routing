@@ -49,6 +49,7 @@ from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import agg_loss
 from verl.trainer.ppo.metric_utils import (
     compute_data_metrics,
+    compute_model_call_metrics,
     compute_throughout_metrics,
     compute_timing_metrics,
     process_validation_metrics,
@@ -686,6 +687,8 @@ class RayPPOTrainer:
 
     def _dump_generations(self, inputs, outputs, scores, reward_extra_infos_dict, dump_path):
         """Dump rollout/validation samples as JSONL."""
+        if not self._should_dump_step_file():
+            return
         os.makedirs(dump_path, exist_ok=True)
         filename = os.path.join(dump_path, f"{self.global_steps}.jsonl")
 
@@ -707,6 +710,23 @@ class RayPPOTrainer:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         print(f"Dumped generations to {filename}")
+
+    def _should_dump_step_file(self, step: Optional[int] = None) -> bool:
+        """Return True when diagnostic step files should be written."""
+        interval = int(self.config.trainer.get("step_file_dump_interval", 5) or 0)
+        if interval <= 1:
+            return True
+        step = self.global_steps if step is None else step
+        return int(step) % interval == 0
+
+    @staticmethod
+    def _compact_llm_metadata(llm_metadata: dict) -> dict:
+        """Drop prompt/response copies already stored at top level in llm_call JSON."""
+        return {
+            k: v
+            for k, v in (llm_metadata or {}).items()
+            if k not in ("summarizer_queries", "raw_responses")
+        }
 
     def _maybe_log_val_generations(self, inputs, outputs, scores):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
@@ -748,6 +768,9 @@ class RayPPOTrainer:
         data_source_lst = []
         tool_calling_list = []
         traj_uid_list = []
+        episode_length_list = []
+        success_per_traj_list = []
+        called_model_list = []
         success_rate_dict = {}
         val_retrieved_list = []  # collect retrieved_memories per validation batch for logging
         val_per_step_retrieved_list = []  # per-step retrieved skills per batch (when per_step_retrieval is True)
@@ -937,6 +960,11 @@ class RayPPOTrainer:
             data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
             tool_calling_list.append(test_output_gen_batch.non_tensor_batch['tool_callings'])
             traj_uid_list.append(test_output_gen_batch.non_tensor_batch['traj_uid'])
+            episode_length_list.append(test_output_gen_batch.non_tensor_batch['episode_lengths'])
+            if 'called_models' in test_output_gen_batch.non_tensor_batch:
+                called_model_list.append(test_output_gen_batch.non_tensor_batch['called_models'])
+            if 'success_per_traj' in test_output_gen_batch.non_tensor_batch:
+                success_per_traj_list.append(test_output_gen_batch.non_tensor_batch['success_per_traj'])
             # success rate
             for k in test_batch.non_tensor_batch.keys():
                 if 'success_rate' in k:
@@ -960,6 +988,9 @@ class RayPPOTrainer:
         data_sources = np.concatenate(data_source_lst, axis=0)
         tool_callings = np.concatenate(tool_calling_list, axis=0)
         traj_uids = np.concatenate(traj_uid_list, axis=0)
+        episode_lengths = np.concatenate(episode_length_list, axis=0)
+        success_per_traj = np.concatenate(success_per_traj_list, axis=0) if success_per_traj_list else reward_tensor.numpy()
+        called_models = np.concatenate(called_model_list, axis=0) if called_model_list else None
         success_rate = {k: np.mean(v) for k, v in success_rate_dict.items()}
 
         # evaluate test_score based on data source
@@ -976,6 +1007,8 @@ class RayPPOTrainer:
         unique_traj_uid, unique_idx = np.unique(traj_uids, return_index=True)
         unique_data_sources = data_sources[unique_idx]
         unique_tool_callings = tool_callings[unique_idx]
+        unique_episode_lengths = np.asarray(episode_lengths)[unique_idx]
+        unique_success = np.asarray(success_per_traj, dtype=np.float32)[unique_idx] > 0
 
         for i in range(unique_tool_callings.shape[0]):
             data_source = unique_data_sources[i]
@@ -994,6 +1027,16 @@ class RayPPOTrainer:
 
         for k, v in success_rate.items():
             metric_dict[f'val/{k}'] = v
+        success_lengths = np.asarray(unique_episode_lengths, dtype=np.float32)[unique_success]
+        metric_dict['val/success_length/mean'] = float(np.mean(success_lengths)) if success_lengths.size > 0 else 0.0
+        metric_dict['val/success_length/count'] = int(success_lengths.size)
+        if called_models is not None:
+            metric_dict.update(
+                compute_model_call_metrics(
+                    {"traj_uid": traj_uids, "called_models": called_models},
+                    prefix="val",
+                )
+            )
 
         # Dynamic Skill Bank Update (validation side): write to both val/train retrieval_memory.
         # If update_source is train/all, the train loop also runs _update_skills_from_training_data;
@@ -1145,7 +1188,8 @@ class RayPPOTrainer:
         # Persist failed trajectories to disk (if enabled)
         save_traj = update_config.get('update_save_traj', False)
         save_dir = self.config.trainer.get('default_local_dir', './outputs')
-        if save_traj:
+        dump_step_file = self._should_dump_step_file()
+        if save_traj and dump_step_file:
             failed_traj_path = os.path.join(save_dir, f'failed_trajectories_step{self.global_steps}.json')
             successful_traj_path = os.path.join(save_dir, f'successful_trajectories_step{self.global_steps}.json')
             try:
@@ -1200,25 +1244,26 @@ class RayPPOTrainer:
 
         # Save LLM call information whenever we ran skill update (so we can verify input/output even if save_traj=False)
         save_dir = self.config.trainer.get('default_local_dir', './outputs')
-        try:
-            os.makedirs(save_dir, exist_ok=True)
-            llm_call_path = os.path.join(save_dir, f'llm_call_step{self.global_steps}.json')
-            prompts_sent_to_llm = llm_metadata.get('summarizer_queries', [])
-            llm_call_data = {
-                'step': self.global_steps,
-                'update_source': 'validation',
-                'prompts_sent_to_llm': prompts_sent_to_llm,
-                'raw_responses': llm_metadata.get('raw_responses', []),
-                'llm_metadata': llm_metadata,
-                'failed_trajectories_analyzed': len(failed_trajectories),
-                'new_skills_generated': len(new_skills),
-            }
-            with open(llm_call_path, 'w', encoding='utf-8') as f:
-                json.dump(llm_call_data, f, indent=2, ensure_ascii=False)
-            print(f"[SkillUpdate] Saved LLM call info (prompts + raw_responses) to {llm_call_path}")
-        except Exception as e:
-            print(f"[SkillUpdate] Warning: Failed to save LLM call info: {e}")
-        if save_traj:
+        if dump_step_file:
+            try:
+                os.makedirs(save_dir, exist_ok=True)
+                llm_call_path = os.path.join(save_dir, f'llm_call_step{self.global_steps}.json')
+                prompts_sent_to_llm = llm_metadata.get('summarizer_queries', [])
+                llm_call_data = {
+                    'step': self.global_steps,
+                    'update_source': 'validation',
+                    'prompts_sent_to_llm': prompts_sent_to_llm,
+                    'raw_responses': llm_metadata.get('raw_responses', []),
+                    'llm_metadata': self._compact_llm_metadata(llm_metadata),
+                    'failed_trajectories_analyzed': len(failed_trajectories),
+                    'new_skills_generated': len(new_skills),
+                }
+                with open(llm_call_path, 'w', encoding='utf-8') as f:
+                    json.dump(llm_call_data, f, indent=2, ensure_ascii=False)
+                print(f"[SkillUpdate] Saved LLM call info (prompts + raw_responses) to {llm_call_path}")
+            except Exception as e:
+                print(f"[SkillUpdate] Warning: Failed to save LLM call info: {e}")
+        if save_traj and dump_step_file:
             try:
                 # Write summarizer query + error_turn back to failed_trajectories JSON.
                 summarizer_queries = llm_metadata.get('summarizer_queries', [])
@@ -1390,6 +1435,8 @@ class RayPPOTrainer:
         som_cfg = self.config.env.get("skills_only_memory", {})
         if not som_cfg.get("record_retrieved_skills", True):
             return
+        if not self._should_dump_step_file(step):
+            return
         if not memories_list or not any(memories_list):
             return
         save_dir = self.config.trainer.get("default_local_dir", "./outputs")
@@ -1431,8 +1478,6 @@ class RayPPOTrainer:
                 sample = {
                     "sample_idx": i,
                     "query_text": mem.get("query_text", ""),
-                    "task_skills": [task_step_skill_row(s) for s in mem.get("task_skills", [])],
-                    "step_skills": [task_step_skill_row(s) for s in mem.get("step_skills", [])],
                 }
                 if per_step_for_batch is not None and i < len(per_step_for_batch):
                     val = per_step_for_batch[i]
@@ -1440,6 +1485,9 @@ class RayPPOTrainer:
                     if not isinstance(val, list):
                         val = [val] if val is not None else []
                     sample["per_step_skills"] = self._json_safe_for_retrieved_skills(val)
+                else:
+                    sample["task_skills"] = [task_step_skill_row(s) for s in mem.get("task_skills", [])]
+                    sample["step_skills"] = [task_step_skill_row(s) for s in mem.get("step_skills", [])]
                 samples.append(sample)
             records.append({"batch_idx": batch_idx, "samples": samples})
         out = {
@@ -1950,7 +1998,6 @@ class RayPPOTrainer:
                             {
                                 'observation': obs_list[i] if i < len(obs_list) else "",
                                 'router_action': router_actions[i] if i < len(router_actions) else "",
-                                'raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
                                 'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
                             }
                             for i in range(turn_count)
@@ -2069,12 +2116,9 @@ class RayPPOTrainer:
         formatted_traj = {
             'task': traj['task'],
             'task_type': traj['task_type'],
-            'full_dialogue': traj.get('full_dialogue', False),
-            'outcome': traj.get('outcome', 'failed'),
             'success': bool(traj.get('success', False)),
             'episode_score': traj.get('episode_score', 0.0),
             'api_cost': traj.get('api_cost', traj.get('cost', 0.0)),
-            'cost': traj.get('cost', traj.get('api_cost', 0.0)),
         }
         if 'refined_trajectory' in traj:
             formatted_traj['refined_trajectory'] = traj['refined_trajectory']
@@ -2097,6 +2141,8 @@ class RayPPOTrainer:
 
     def _save_training_model_call_stats_from_batch(self, batch) -> None:
         """Save model call statistics for every trajectory in the current train rollout."""
+        if not self._should_dump_step_file():
+            return
         nt = getattr(batch, 'non_tensor_batch', None) or {}
         traj_uids = nt.get('traj_uid')
         called_models = nt.get('called_models')
@@ -2113,7 +2159,7 @@ class RayPPOTrainer:
             if traj_uid not in traj_stats:
                 traj_stats[traj_uid] = {
                     'traj_uid': traj_uid,
-                    'model_call_counts': {model_name: 0 for model_name in model_names},
+                    'model_call_counts': {},
                     'total_model_calls': 0,
                     'episode_score': 0.0,
                     'success': False,
@@ -2138,13 +2184,12 @@ class RayPPOTrainer:
             called_model = str(called_model).strip()
             if called_model not in MODEL_CONF:
                 continue
-            traj_stats[traj_uid]['model_call_counts'][called_model] += 1
+            traj_stats[traj_uid]['model_call_counts'][called_model] = traj_stats[traj_uid]['model_call_counts'].get(called_model, 0) + 1
             traj_stats[traj_uid]['total_model_calls'] += 1
 
         failed_trajectories = []
         successful_trajectories = []
         for item in traj_stats.values():
-            item['outcome'] = 'successful' if item['success'] else 'failed'
             if item['success']:
                 successful_trajectories.append(item)
             else:
@@ -2158,15 +2203,17 @@ class RayPPOTrainer:
                 for model_name, count in item['model_call_counts'].items():
                     totals[model_name] = totals.get(model_name, 0) + int(count)
             num_trajectories = len(items)
+            avg_counts = {
+                model_name: count / num_trajectories
+                for model_name, count in totals.items()
+                if count
+            }
             return {
                 'num_trajectories': num_trajectories,
-                'total_model_call_counts': totals,
+                'total_model_call_counts': {model_name: count for model_name, count in totals.items() if count},
                 'total_model_calls': total_calls,
                 'average_total_model_calls_per_trajectory': total_calls / num_trajectories if num_trajectories else 0.0,
-                'average_model_call_counts_per_trajectory': {
-                    model_name: totals.get(model_name, 0) / num_trajectories if num_trajectories else 0.0
-                    for model_name in model_names
-                },
+                'average_model_call_counts_per_trajectory': avg_counts,
                 'per_trajectory': items,
             }
 
@@ -2177,7 +2224,6 @@ class RayPPOTrainer:
         overall_stats.pop('per_trajectory', None)
         stats = {
             'step': int(self.global_steps),
-            'model_names_from_models_config': model_names,
             'failed': failed_stats,
             'successful': successful_stats,
             'overall': overall_stats,
@@ -2216,7 +2262,8 @@ class RayPPOTrainer:
         # Persist failed trajectories to disk (if enabled)
         save_traj = update_config.get('update_save_traj', False)
         save_dir = self.config.trainer.get('default_local_dir', './outputs')
-        if save_traj:
+        dump_step_file = self._should_dump_step_file()
+        if save_traj and dump_step_file:
             failed_traj_path = os.path.join(save_dir, f'failed_trajectories_train_step{self.global_steps}.json')
             successful_traj_path = os.path.join(save_dir, f'successful_trajectories_train_step{self.global_steps}.json')
             try:
@@ -2277,25 +2324,26 @@ class RayPPOTrainer:
         # Save complete LLM call information (prompt, response, metadata)
         # Save LLM call info whenever we ran skill update (so we can verify input/output even if save_traj=False)
         save_dir = self.config.trainer.get('default_local_dir', './outputs')
-        try:
-            os.makedirs(save_dir, exist_ok=True)
-            llm_call_path = os.path.join(save_dir, f'llm_call_train_step{self.global_steps}.json')
-            prompts_sent_to_llm = llm_metadata.get('summarizer_queries', [])
-            llm_call_data = {
-                'step': self.global_steps,
-                'update_source': 'train',
-                'prompts_sent_to_llm': prompts_sent_to_llm,
-                'raw_responses': llm_metadata.get('raw_responses', []),
-                'llm_metadata': llm_metadata,
-                'failed_trajectories_analyzed': len(trajectories_to_analyze),
-                'new_skills_generated': len(new_skills),
-            }
-            with open(llm_call_path, 'w', encoding='utf-8') as f:
-                json.dump(llm_call_data, f, indent=2, ensure_ascii=False)
-            print(f"[SkillUpdate-Train] Saved LLM call info (prompts + raw_responses) to {llm_call_path}")
-        except Exception as e:
-            print(f"[SkillUpdate-Train] Warning: Failed to save LLM call info: {e}")
-        if save_traj:
+        if dump_step_file:
+            try:
+                os.makedirs(save_dir, exist_ok=True)
+                llm_call_path = os.path.join(save_dir, f'llm_call_train_step{self.global_steps}.json')
+                prompts_sent_to_llm = llm_metadata.get('summarizer_queries', [])
+                llm_call_data = {
+                    'step': self.global_steps,
+                    'update_source': 'train',
+                    'prompts_sent_to_llm': prompts_sent_to_llm,
+                    'raw_responses': llm_metadata.get('raw_responses', []),
+                    'llm_metadata': self._compact_llm_metadata(llm_metadata),
+                    'failed_trajectories_analyzed': len(trajectories_to_analyze),
+                    'new_skills_generated': len(new_skills),
+                }
+                with open(llm_call_path, 'w', encoding='utf-8') as f:
+                    json.dump(llm_call_data, f, indent=2, ensure_ascii=False)
+                print(f"[SkillUpdate-Train] Saved LLM call info (prompts + raw_responses) to {llm_call_path}")
+            except Exception as e:
+                print(f"[SkillUpdate-Train] Warning: Failed to save LLM call info: {e}")
+        if save_traj and dump_step_file:
             try:
                 # Write summarizer query and ERROR_TURN back to failed_trajectories JSON
                 # for memory persistence.
