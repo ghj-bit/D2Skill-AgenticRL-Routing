@@ -1180,23 +1180,29 @@ class RayPPOTrainer:
         if not removed and not warnings:
             return
         save_dir = self.config.trainer.get("default_local_dir", "./outputs")
-        try:
-            os.makedirs(save_dir, exist_ok=True)
-            audit_path = os.path.join(save_dir, f"evicted_skills_step{self.global_steps}.json")
-            with open(audit_path, "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=2, ensure_ascii=False)
-            print(f"[SkillEviction] Wrote audit to {audit_path}")
-        except Exception as e:
-            print(f"[SkillEviction] Audit write failed: {e}")
-        if removed:
+        dump_step_file = self._should_dump_step_file()
+        if dump_step_file:
             try:
-                bank_path = os.path.join(save_dir, f"skills_after_eviction_step{self.global_steps}.json")
-                rm.save_skills(bank_path)
+                os.makedirs(save_dir, exist_ok=True)
+                audit_path = os.path.join(save_dir, f"evicted_skills_step{self.global_steps}.json")
+                with open(audit_path, "w", encoding="utf-8") as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False)
+                print(f"[SkillEviction] Wrote audit to {audit_path}")
             except Exception as e:
-                print(f"[SkillEviction] save_skills failed: {e}")
+                print(f"[SkillEviction] Audit write failed: {e}")
+        if removed:
+            if dump_step_file:
+                try:
+                    bank_path = os.path.join(save_dir, f"skills_after_eviction_step{self.global_steps}.json")
+                    rm.save_skills(bank_path)
+                except Exception as e:
+                    print(f"[SkillEviction] save_skills failed: {e}")
             self._sync_skills_to_retrieval_server(rm)
         elif warnings:
-            print(f"[SkillEviction] No removals (see warnings in audit); skipping save_skills / server sync")
+            if dump_step_file:
+                print(f"[SkillEviction] No removals (see warnings in audit); skipping save_skills / server sync")
+            else:
+                print(f"[SkillEviction] No removals; skipping file dump / save_skills / server sync")
 
     def _update_skills_from_validation(
         self,
@@ -1362,8 +1368,9 @@ class RayPPOTrainer:
             if hasattr(self, 'envs') and self.envs.retrieval_memory:
                 self.envs.retrieval_memory.add_skills(task_skills, category='task', created_at_step=_cs)
         if new_skills or task_skills:
-            save_path = os.path.join(save_dir, f'updated_skills_step{self.global_steps}.json')
-            retrieval_memory.save_skills(save_path)
+            if dump_step_file:
+                save_path = os.path.join(save_dir, f'updated_skills_step{self.global_steps}.json')
+                retrieval_memory.save_skills(save_path)
             self._sync_skills_to_retrieval_server(retrieval_memory)
 
     def _sync_skills_to_retrieval_server(self, retrieval_memory) -> None:
@@ -2443,8 +2450,9 @@ class RayPPOTrainer:
             if hasattr(self, 'val_envs') and self.val_envs.retrieval_memory:
                 self.val_envs.retrieval_memory.add_skills(task_skills, category='task', created_at_step=_cs)
         if new_skills or task_skills:
-            save_path = os.path.join(save_dir, f'updated_skills_train_step{self.global_steps}.json')
-            retrieval_memory.save_skills(save_path)
+            if dump_step_file:
+                save_path = os.path.join(save_dir, f'updated_skills_train_step{self.global_steps}.json')
+                retrieval_memory.save_skills(save_path)
             self._sync_skills_to_retrieval_server(retrieval_memory)
         return
 

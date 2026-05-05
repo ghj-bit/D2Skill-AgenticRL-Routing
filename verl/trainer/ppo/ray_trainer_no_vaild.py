@@ -640,6 +640,9 @@ class RayPPOTrainer:
 
     def _dump_generations(self, inputs, outputs, scores, reward_extra_infos_dict, dump_path):
         """Dump rollout/validation samples as JSONL."""
+        if not self._should_dump_step_file():
+            return
+
         os.makedirs(dump_path, exist_ok=True)
         filename = os.path.join(dump_path, f"{self.global_steps}.jsonl")
 
@@ -661,6 +664,20 @@ class RayPPOTrainer:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         print(f"Dumped generations to {filename}")
+
+    def _should_dump_step_file(self, step=None) -> bool:
+        try:
+            interval = int(self.config.trainer.get("step_file_dump_interval", 5) or 0)
+        except (TypeError, ValueError):
+            interval = 5
+        if interval <= 1:
+            return True
+        current_step = self.global_steps if step is None else step
+        try:
+            current_step = int(current_step)
+        except (TypeError, ValueError):
+            return True
+        return current_step % interval == 0
 
     def _maybe_log_val_generations(self, inputs, outputs, scores):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
@@ -924,9 +941,10 @@ class RayPPOTrainer:
                 print(f"[SkillUpdate-Train] Synced {len(new_skills)} new skills to val_envs")
 
             # save snapshot to disk
-            save_dir = self.config.trainer.get('default_local_dir', './outputs')
-            save_path = os.path.join(save_dir, f'updated_skills_train_step{self.global_steps}.json')
-            retrieval_memory.save_skills(save_path)
+            if self._should_dump_step_file():
+                save_dir = self.config.trainer.get('default_local_dir', './outputs')
+                save_path = os.path.join(save_dir, f'updated_skills_train_step{self.global_steps}.json')
+                retrieval_memory.save_skills(save_path)
 
             # reset buffer and rolling success window
             self._train_failed_buffer = []
