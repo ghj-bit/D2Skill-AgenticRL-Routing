@@ -495,7 +495,7 @@ class TrajectoryCollector:
 
             batch = batch.union(batch_output)
             route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
-            print(f'路由器输出：{route_actions_str}')
+            # print(f'路由器输出：{route_actions_str}')
             next_obs, dones, valid_action, is_route, cur_completion_tokens, text_model_actions, models = self.execute_predictions(
                 route_actions_str, original_obs, self.tokenizer.pad_token, active_masks
             )
@@ -815,9 +815,9 @@ class TrajectoryCollector:
                     valid_action.append(0)
                     is_route.append(0)
                     cur_completion_tokens.append(0.0)
-        print(f'len(route_results): {len(route_results)}')
-        print(f'len(completion_tokens_list): {len(completion_tokens_list)}')
-        print(f'len(called_model_names): {len(called_model_names)}')
+        # print(f'len(route_results): {len(route_results)}')
+        # print(f'len(completion_tokens_list): {len(completion_tokens_list)}')
+        # print(f'len(called_model_names): {len(called_model_names)}')
         assert len(route_results) == 0
         assert len(completion_tokens_list) == 0
         assert len(called_model_names) == 0
