@@ -17,6 +17,9 @@ from verl import DataProto
 import torch
 import numpy as np
 from collections import deque
+import re
+
+from routing.models_config.models_config import MODEL_CONF
 
 class EpisodeRewardManager:
     """The reward manager.
@@ -44,6 +47,32 @@ class EpisodeRewardManager:
         self.cost_transform = cost_transform
         self._cost_eps = 1e-8
         self._cost_buffer = deque(maxlen=int(cost_normalization_window or 1000))
+        self._valid_route_models = set(MODEL_CONF.keys())
+        self._route_format_pattern = re.compile(r"^<search>([^<>\r\n]+)</search>$")
+
+    def _decode_valid_response(self, data_item, skip_special_tokens: bool) -> str:
+        prompt_ids = data_item.batch['prompts']
+        prompt_length = prompt_ids.shape[-1]
+        response_ids = data_item.batch['responses']
+        valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+        valid_response_ids = response_ids[:valid_response_length]
+        return self.tokenizer.decode(valid_response_ids, skip_special_tokens=skip_special_tokens)
+
+    def _route_format_valid(self, response: str) -> bool:
+        match = self._route_format_pattern.fullmatch((response or "").strip())
+        if not match:
+            return False
+        return match.group(1) in self._valid_route_models
+
+    def _collect_invalid_format_trajs(self, data: DataProto) -> set:
+        invalid_trajs = set()
+        for i in range(len(data)):
+            data_item = data[i]
+            traj_uid = data_item.non_tensor_batch.get('traj_uid', i)
+            response = self._decode_valid_response(data_item, skip_special_tokens=True)
+            if not self._route_format_valid(response):
+                invalid_trajs.add(traj_uid)
+        return invalid_trajs
 
     def _preprocess_cost(self, cost: float) -> float:
         cost = max(float(cost), 0.0)
@@ -99,8 +128,10 @@ class EpisodeRewardManager:
             "base_episode_rewards": [],
             "api_costs": [],
             "cost_rewards": [],
+            "format_rewards": [],
             "final_rewards": [],
         }
+        invalid_format_trajs = self._collect_invalid_format_trajs(data)
 
         already_print_data_sources = {}
 
@@ -116,11 +147,10 @@ class EpisodeRewardManager:
 
             response_ids = data_item.batch['responses']
             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
-            valid_response_ids = response_ids[:valid_response_length]
 
             # decode
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=False)
-            response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=False)
+            response_str = self._decode_valid_response(data_item, skip_special_tokens=False)
 
             # ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
 
@@ -133,17 +163,27 @@ class EpisodeRewardManager:
                 image_grid_thw = multi_modal_inputs['image_grid_thw']
 
 
-            base_score = self._episode_success_reward(data_item)
             api_cost = float(data_item.non_tensor_batch.get('api_costs', 0.0))
-            cost_reward = self._normalize_cost_reward(api_cost)
-            if self.cost_coe > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
-                score = float(base_score) * (1.0 - self.cost_coe) + cost_reward * self.cost_coe
+            traj_uid = data_item.non_tensor_batch.get('traj_uid', i)
+            format_valid = traj_uid not in invalid_format_trajs
+            if not format_valid:
+                base_score = 0.0
+                cost_reward = 0.0
+                format_reward = -1.0
+                score = -1.0
             else:
-                score = float(base_score)
+                base_score = self._episode_success_reward(data_item)
+                cost_reward = self._normalize_cost_reward(api_cost)
+                format_reward = 0.0
+                if self.cost_coe > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
+                    score = float(base_score) * (1.0 - self.cost_coe) + cost_reward * self.cost_coe
+                else:
+                    score = float(base_score)
             reward_tensor[i, valid_response_length - 1] = torch.tensor(score, dtype=torch.float32, device=prompt_ids.device)
             reward_extra_info["base_episode_rewards"].append(float(base_score))
             reward_extra_info["api_costs"].append(api_cost)
             reward_extra_info["cost_rewards"].append(float(cost_reward))
+            reward_extra_info["format_rewards"].append(float(format_reward))
             reward_extra_info["final_rewards"].append(float(score))
 
             if data_source not in already_print_data_sources:
@@ -156,6 +196,7 @@ class EpisodeRewardManager:
                 print(f"[{data_source}][base_score]", base_score)
                 print(f"[{data_source}][api_cost]", api_cost)
                 print(f"[{data_source}][cost_reward]", cost_reward)
+                print(f"[{data_source}][format_valid]", format_valid)
                 print(f"[{data_source}][score]", score)
 
         if return_dict:

@@ -242,13 +242,15 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             }
         ),
     }
-    for key in ["base_episode_rewards", "api_costs", "cost_rewards", "final_rewards"]:
+    for key in ["base_episode_rewards", "api_costs", "cost_rewards", "format_rewards", "final_rewards"]:
         if key in batch.non_tensor_batch:
             values = np.asarray(batch.non_tensor_batch[key], dtype=np.float32).reshape(-1)
             if values.size > 0:
                 metrics[f"episode/{key}/mean"] = float(np.mean(values))
                 metrics[f"episode/{key}/max"] = float(np.max(values))
                 metrics[f"episode/{key}/min"] = float(np.min(values))
+                if key == "format_rewards":
+                    metrics["episode/format_invalid_rate"] = float(np.mean(values < 0))
     metrics.update(compute_model_call_metrics(batch.non_tensor_batch, prefix="episode"))
     return metrics
 

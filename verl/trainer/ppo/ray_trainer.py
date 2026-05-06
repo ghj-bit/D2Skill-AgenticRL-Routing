@@ -1845,8 +1845,11 @@ class RayPPOTrainer:
             query_texts_batch = batch.non_tensor_batch.get('query_text') if batch is not None else None
             model_actions_batch = batch.non_tensor_batch.get('model_actions') if batch is not None else None
             api_costs_batch = batch.non_tensor_batch.get('api_costs') if batch is not None else None
+            success_per_traj_batch = batch.non_tensor_batch.get('success_per_traj') if batch is not None else None
             traj_dict = {}
             for idx, (inp, out, score, traj_uid) in enumerate(zip(inputs, outputs, scores, traj_uids)):
+                if success_per_traj_batch is not None and idx < len(success_per_traj_batch):
+                    score = success_per_traj_batch[idx]
                 if traj_uid not in traj_dict:
                     traj_dict[traj_uid] = {
                         'inputs': [],
@@ -2817,8 +2820,10 @@ class RayPPOTrainer:
                             _inp = batch.batch["prompts"] if "prompts" in batch.batch else batch.batch["input_ids"]
                             _train_inputs = self.tokenizer.batch_decode(_inp, skip_special_tokens=True)
                             _train_outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                            success_per_traj = batch.non_tensor_batch.get("success_per_traj")
                             ep_rew = batch.non_tensor_batch.get("episode_rewards")
-                            _train_scores = np.asarray(ep_rew).ravel().tolist() if ep_rew is not None else [0.0] * len(_train_inputs)
+                            score_source = success_per_traj if success_per_traj is not None else ep_rew
+                            _train_scores = np.asarray(score_source).ravel().tolist() if score_source is not None else [0.0] * len(_train_inputs)
                             new_failures = self._collect_failed_trajectories(
                                 _train_inputs, _train_outputs, _train_scores, batch=batch,
                                 with_skills_mask=batch.non_tensor_batch.get("with_skills_mask"),
