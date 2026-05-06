@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export WANDB_MODE=offline
+export WANDB_CACHE_DIR="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/D2Skill-AgenticRL-Routing/wandb"
 usage() {
   cat <<'EOF'
 Usage:
