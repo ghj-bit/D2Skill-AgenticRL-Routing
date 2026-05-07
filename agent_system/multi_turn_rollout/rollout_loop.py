@@ -26,6 +26,7 @@ from agent_system.environments import EnvironmentManagerBase
 from typing import List, Dict, Any, Optional
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 from routing.llm_agent.route_service import access_routing_pool
+from routing.models_config.models_config import MODEL_CONF
 import re
 from typing import List, Dict, Any, Tuple
 import logging
@@ -496,10 +497,12 @@ class TrajectoryCollector:
             batch = batch.union(batch_output)
             route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
             # print(f'路由器输出：{route_actions_str}')
-            next_obs, dones, valid_action, is_route, cur_completion_tokens, text_model_actions, models = self.execute_predictions(
+            next_obs, dones, valid_action, is_route, cur_completion_tokens, text_model_actions, models, route_format_valid = self.execute_predictions(
                 route_actions_str, original_obs, self.tokenizer.pad_token, active_masks
             )
+            route_format_valid = np.array(route_format_valid, dtype=bool)
             batch.non_tensor_batch['router_actions'] = np.array(route_actions_str, dtype=object)
+            batch.non_tensor_batch['route_format_valid'] = route_format_valid
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
             batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
             # print(f"路由模型执行动作：{text_model_actions}")
@@ -519,9 +522,10 @@ class TrajectoryCollector:
                 dones = dones.squeeze(1)
 
             if 'is_action_valid' in infos[0]:
-                batch.non_tensor_batch['is_action_valid'] = np.array([info['is_action_valid'] for info in infos], dtype=bool)
+                batch.non_tensor_batch['env_action_valid'] = np.array([info['is_action_valid'] for info in infos], dtype=bool)
             else:
-                batch.non_tensor_batch['is_action_valid'] = np.ones(batch_size, dtype=bool)
+                batch.non_tensor_batch['env_action_valid'] = np.ones(batch_size, dtype=bool)
+            batch.non_tensor_batch['is_action_valid'] = route_format_valid
 
             if 'tool_calling' in infos[0]:
                 tool_callings[active_masks] += np.array([info['tool_calling'] for info in infos], dtype=np.float32)[active_masks]
@@ -727,7 +731,7 @@ class TrajectoryCollector:
         models = []
         # 预处理router输出结果，获得content = model:query 
         #但现在只有model
-        cur_actions, contents = self.postprocess_predictions(predictions)
+        cur_actions, contents, route_format_valids = self.postprocess_predictions(predictions)
         contexts = original_obs.get('text', None)
         forced_route_model = self._get_forced_route_model()
         # print(f"contents: {contents}")
@@ -822,7 +826,7 @@ class TrajectoryCollector:
         assert len(completion_tokens_list) == 0
         assert len(called_model_names) == 0
         # models = cur_actions
-        return next_obs, dones, valid_action, is_route, cur_completion_tokens, model_actions, models
+        return next_obs, dones, valid_action, is_route, cur_completion_tokens, model_actions, models, route_format_valids
 
     def _get_forced_route_model(self) -> str:
         """Optional eval hook: force every routed search call to a fixed backend model."""
@@ -835,7 +839,32 @@ class TrajectoryCollector:
             raise ValueError("routing.force_model_enable=True requires routing.force_model_name to be set")
         return model_name
 
-    def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
+    @staticmethod
+    def _postprocess_route_action(action: str) -> str:
+        if "</search>" in action:
+            return action.split("</search>", 1)[0] + "</search>"
+        if "</answer>" in action:
+            return action.split("</answer>", 1)[0] + "</answer>"
+        return action
+
+    @staticmethod
+    def _project_route_action(prediction: str) -> Tuple[str, str, bool]:
+        original = (prediction or "").strip()
+        trimmed = TrajectoryCollector._postprocess_route_action(original)
+        match = re.search(r"<search>(.*?)</search>", trimmed, re.DOTALL)
+        if not match:
+            return None, "", False
+        model_name = match.group(1).strip()
+        projected = f"<search>{model_name}</search>"
+        valid = (
+            original == projected
+            and len(re.findall(r"<search>", original)) == 1
+            and not re.search(r"</?answer>", original)
+            and model_name in MODEL_CONF
+        )
+        return ("search" if valid else None), (model_name if valid else ""), valid
+
+    def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[str], List[str], List[bool]]:
         """
         Process (text-based) predictions from llm into actions and validity flags.
         
@@ -847,31 +876,19 @@ class TrajectoryCollector:
         """
         actions = []
         contents = []
+        valids = []
                 
         for prediction in predictions:
             if isinstance(prediction, str): # for llm output
-                pattern = r'<(search|answer)>(.*?)</\1>'
-                match = re.search(pattern, prediction, re.DOTALL)
-                if match:
-                    # content = match.group(2).strip()  # Return only the content inside the tags
-                    content = match.group(2).strip()
-                    action = match.group(1)
-                    # if action == "search" and ("llm-name" in content.strip().lower() or "your-query" in content.strip().lower()):
-                    #     action = "route invalid-1"
-                    # elif action == "search" and ":" not in content:
-                    #     action = "route invalid-2"
-                    # elif action == "search" and content.strip().lower().split(":")[-1].strip() == "":
-                    #     action = "route invalid-3"
-                else:
-                    content = ''
-                    action = None
+                action, content, valid = self._project_route_action(prediction)
             else:
                 raise ValueError(f"Invalid prediction type: {type(prediction)}")
             
             actions.append(action)
             contents.append(content)
+            valids.append(valid)
             
-        return actions, contents
+        return actions, contents, valids
     def batch_route(self, queries: Dict = None) -> str:
         ret = access_routing_pool(queries=queries, api_base=self.config.api_base, api_key=self.config.api_key)
         

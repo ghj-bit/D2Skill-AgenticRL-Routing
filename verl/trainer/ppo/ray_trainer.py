@@ -234,7 +234,7 @@ def apply_invalid_action_penalty(
     data: DataProto,
     invalid_action_penalty_coef=float,
     tokenizer=None,
-    use_think_penalty: bool = True,
+    use_think_penalty: bool = False,
 ):
     reward_tensor = data.batch['token_level_scores']
     if 'step_rewards' in data.batch.keys():
@@ -261,10 +261,12 @@ def apply_invalid_action_penalty(
             if not _has_think_block(response_text):
                 step_valid = 0.0
         step_invalids = torch.tensor(1.0 - step_valid, dtype=torch.float32, device=prompt_ids.device)
-        reward_tensor[i, valid_response_length - 1] -= invalid_action_penalty_coef * step_invalids
+        if step_invalids.item() > 0:
+            reward_tensor[i, valid_response_length - 1] = -invalid_action_penalty_coef
 
         if 'step_rewards' in data.batch.keys():
-            step_rewards[i] -= invalid_action_penalty_coef * step_invalids
+            if step_invalids.item() > 0:
+                step_rewards[i] = -invalid_action_penalty_coef
 
     valid_action_ratio = np.mean(data.non_tensor_batch['is_action_valid'].astype(np.float32)).item()
     metrics = {'episode/valid_action_ratio': valid_action_ratio}
@@ -2938,7 +2940,7 @@ class RayPPOTrainer:
                                 batch,
                                 invalid_action_penalty_coef=self.config.actor_rollout_ref.actor.invalid_action_penalty_coef,
                                 tokenizer=self.tokenizer,
-                                use_think_penalty=self.config.actor_rollout_ref.actor.get('use_think_penalty', True),
+                                use_think_penalty=self.config.actor_rollout_ref.actor.get('use_think_penalty', False),
                             )
                             metrics.update(invalid_metrics)
 

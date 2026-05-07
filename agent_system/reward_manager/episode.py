@@ -36,6 +36,8 @@ class EpisodeRewardManager:
         cost_percentile_low=0.05,
         cost_percentile_high=0.95,
         cost_transform="sqrt",
+        success_reward_weight=None,
+        cost_reward_weight=None,
     ) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
@@ -45,6 +47,12 @@ class EpisodeRewardManager:
         self.cost_percentile_low = float(cost_percentile_low)
         self.cost_percentile_high = float(cost_percentile_high)
         self.cost_transform = cost_transform
+        self.success_reward_weight = float(
+            (1.0 - self.cost_coe) if success_reward_weight is None else success_reward_weight
+        )
+        self.cost_reward_weight = float(
+            self.cost_coe if cost_reward_weight is None else cost_reward_weight
+        )
         self._cost_eps = 1e-8
         self._cost_buffer = deque(maxlen=int(cost_normalization_window or 1000))
         self._valid_route_models = set(MODEL_CONF.keys())
@@ -131,8 +139,6 @@ class EpisodeRewardManager:
             "format_rewards": [],
             "final_rewards": [],
         }
-        invalid_format_trajs = self._collect_invalid_format_trajs(data)
-
         already_print_data_sources = {}
 
         for i in range(len(data)):
@@ -164,21 +170,18 @@ class EpisodeRewardManager:
 
 
             api_cost = float(data_item.non_tensor_batch.get('api_costs', 0.0))
-            traj_uid = data_item.non_tensor_batch.get('traj_uid', i)
-            format_valid = traj_uid not in invalid_format_trajs
-            if not format_valid:
-                base_score = 0.0
-                cost_reward = 0.0
-                format_reward = -1.0
-                score = -1.0
+            action_valid = data_item.non_tensor_batch.get('is_action_valid', True)
+            try:
+                format_valid = bool(np.asarray(action_valid).reshape(-1)[0])
+            except Exception:
+                format_valid = bool(action_valid)
+            base_score = self._episode_success_reward(data_item)
+            cost_reward = self._normalize_cost_reward(api_cost)
+            format_reward = 0.0 if format_valid else -1.0
+            if self.cost_reward_weight > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
+                score = float(base_score) * self.success_reward_weight + cost_reward * self.cost_reward_weight
             else:
-                base_score = self._episode_success_reward(data_item)
-                cost_reward = self._normalize_cost_reward(api_cost)
-                format_reward = 0.0
-                if self.cost_coe > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
-                    score = float(base_score) * (1.0 - self.cost_coe) + cost_reward * self.cost_coe
-                else:
-                    score = float(base_score)
+                score = float(base_score) * self.success_reward_weight
             reward_tensor[i, valid_response_length - 1] = torch.tensor(score, dtype=torch.float32, device=prompt_ids.device)
             reward_extra_info["base_episode_rewards"].append(float(base_score))
             reward_extra_info["api_costs"].append(api_cost)
