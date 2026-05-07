@@ -234,8 +234,8 @@ class TrajectoryCollector:
 
     def preprocess_batch(
         self,
-        gen_batch: DataProto, 
-        obs: Dict, 
+        gen_batch: DataProto,
+        obs: Dict,
     ) -> DataProto:
         """
         Process a batch of observation samples, converting environment observations into model-processable format.
@@ -273,6 +273,70 @@ class TrajectoryCollector:
         )
 
         return new_batch
+
+    def append_routed_model_outputs(
+        self,
+        batch: DataProto,
+        router_outputs: List[str],
+        routed_outputs: List[str],
+    ) -> DataProto:
+        """Append routed model raw outputs after router responses and mask them out of policy loss."""
+        responses = batch.batch["responses"]
+        attention_mask = batch.batch["attention_mask"]
+        input_ids = batch.batch["input_ids"]
+        prompt_length = batch.batch["prompts"].shape[-1]
+        response_length = responses.shape[-1]
+        loss_mask = torch.zeros_like(attention_mask)
+
+        pad_id = self.tokenizer.pad_token_id
+        if pad_id is None:
+            pad_id = self.tokenizer.eos_token_id
+
+        for i, output in enumerate(routed_outputs):
+            router_ids = self.tokenizer(
+                str(router_outputs[i]) if i < len(router_outputs) else "",
+                add_special_tokens=False,
+                return_attention_mask=False,
+            )["input_ids"]
+            router_len = min(len(router_ids), response_length)
+            if router_len <= 0:
+                continue
+            loss_mask[i, prompt_length:prompt_length + router_len] = 1
+            attention_mask[i, prompt_length + router_len:prompt_length + response_length] = 0
+            if pad_id is not None:
+                responses[i, router_len:] = pad_id
+                input_ids[i, prompt_length + router_len:prompt_length + response_length] = pad_id
+
+            capacity = response_length - router_len
+            if capacity <= 0 or not output:
+                continue
+
+            output_ids = self.tokenizer(
+                str(output),
+                add_special_tokens=False,
+                return_attention_mask=False,
+            )["input_ids"]
+            if not output_ids:
+                continue
+
+            output_ids = output_ids[:capacity]
+            output_tensor = torch.tensor(output_ids, dtype=responses.dtype, device=responses.device)
+            start = router_len
+            end = router_len + output_tensor.numel()
+            responses[i, start:end] = output_tensor
+            attention_mask[i, prompt_length + start:prompt_length + end] = 1
+            input_ids[i, prompt_length + start:prompt_length + end] = output_tensor
+
+            if end < response_length and pad_id is not None:
+                responses[i, end:] = pad_id
+                input_ids[i, prompt_length + end:prompt_length + response_length] = pad_id
+
+        batch.batch["responses"] = responses
+        batch.batch["input_ids"] = input_ids
+        batch.batch["attention_mask"] = attention_mask
+        batch.batch["position_ids"] = compute_position_id_with_mask(attention_mask)
+        batch.batch["loss_mask"] = loss_mask
+        return batch
 
 
     def gather_rollout_data(
@@ -497,14 +561,15 @@ class TrajectoryCollector:
             batch = batch.union(batch_output)
             route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
             # print(f'路由器输出：{route_actions_str}')
-            next_obs, dones, valid_action, is_route, cur_completion_tokens, text_model_actions, models, route_format_valid = self.execute_predictions(
-                route_actions_str, original_obs, self.tokenizer.pad_token, active_masks
+            cur_completion_tokens, text_model_actions, models, route_format_valid = self.execute_predictions(
+                route_actions_str, original_obs
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
             batch.non_tensor_batch['router_actions'] = np.array(route_actions_str, dtype=object)
             batch.non_tensor_batch['route_format_valid'] = route_format_valid
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
             batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
+            batch = self.append_routed_model_outputs(batch, route_actions_str, text_model_actions)
             # print(f"路由模型执行动作：{text_model_actions}")
             next_obs, next_route_obs, rewards, dones, infos = envs.step(text_model_actions, models)
 
@@ -713,19 +778,15 @@ class TrajectoryCollector:
         
         return gen_batch_output
     
-    def execute_predictions(self, predictions: List[str],  original_obs: Dict, pad_token: str, active_mask=None, do_route=True) -> List[str]:
+    def execute_predictions(self, predictions: List[str], original_obs: Dict, do_route=True) -> List[str]:
         """
         Execute predictions across multiple environments.
         NOTE: the function is the actual `step` function in the environment
         NOTE penalty_for_invalid is not included in observation shown to the LLM
         
         Args:
-            envs: List of environment instances
-            predictions: List of action predictions
-            pad_token: Token to use for padding
-            
-        Returns:
-            List of observation strings
+            predictions: List of router predictions
+            original_obs: Current environment observations used as routed-model query context
         """
         model_actions = []
         models = []
@@ -735,7 +796,7 @@ class TrajectoryCollector:
         contexts = original_obs.get('text', None)
         forced_route_model = self._get_forced_route_model()
         # print(f"contents: {contents}")
-        next_obs, dones, valid_action, is_route, cur_completion_tokens = [], [], [], [], []
+        cur_completion_tokens = []
         # 构造agent的content
         # route_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
         # route_queries = [
@@ -751,12 +812,12 @@ class TrajectoryCollector:
         route_queries = {
             "model_name": [
                 forced_route_model or content
-                for action, context, content in zip(cur_actions, contexts, contents)
+                for action, content in zip(cur_actions, contents)
                 if action == 'search'
             ],
             "query": [
                 context
-                for action, context, content in zip(cur_actions, contexts, contents)
+                for action, context in zip(cur_actions, contexts)
                 if action == 'search'
             ]
         }
@@ -770,63 +831,32 @@ class TrajectoryCollector:
             completion_tokens_list = [0.0] * sum([1 for action in cur_actions if action == 'search'])
             called_model_names = [''] * sum([1 for action in cur_actions if action == 'search'])
 
-        for i, (action, content, active) in enumerate(zip(cur_actions, contents, active_mask)):
-            # if not active:
-                # next_obs.append('')
-                # dones.append(1)
-                # valid_action.append(0)
-                # is_route.append(0)
-                # cur_completion_tokens.append(0.0)
-                # # model_resp = route_results.pop(0).strip()
-                # model_actions.append('')
-                # # cur_completion_tokens.append(completion_tokens_list.pop(0))
-                # continue
-            # else:
-                # if action == 'answer':
-                #     next_obs.append('')
-                #     dones.append(1)
-                #     valid_action.append(1)
-                #     is_route.append(0)
-                #     cur_completion_tokens.append(0.0)
-                if action == 'search':
-                    called_model_name = called_model_names.pop(0)
-                    if route_results[0].strip().lower() == "llm name error":
-                        next_obs.append(f'\n\n<information>None</information>\n\n')
-                        model_actions.append('')
-                        route_results.pop(0)
-                        valid_action.append(0)
-                        models.append('')
-                    elif route_results[0].strip().lower() == "api request error":
-                        next_obs.append(f'\n\n<information>None</information>\n\n')
-                        model_actions.append('')
-                        route_results.pop(0)
-                        valid_action.append(0)
-                        models.append(called_model_name)
-                    else:
-                        model_resp = route_results.pop(0).strip()
-                        next_obs.append(f'\n\n<information>{model_resp}</information>\n\n')
-                        model_actions.append(model_resp)
-                        valid_action.append(1)
-                        models.append(called_model_name)
-                    dones.append(0)
-                    is_route.append(1)
-                    cur_completion_tokens.append(completion_tokens_list.pop(0))
-                else:
+        for action in cur_actions:
+            if action == 'search':
+                called_model_name = called_model_names.pop(0)
+                route_result = route_results.pop(0)
+                route_result_lower = route_result.strip().lower()
+                if route_result_lower == "llm name error":
                     model_actions.append('')
                     models.append('')
-                    next_obs.append('')
-                    dones.append(0)
-                    valid_action.append(0)
-                    is_route.append(0)
-                    cur_completion_tokens.append(0.0)
+                elif route_result_lower == "api request error":
+                    model_actions.append('')
+                    models.append(called_model_name)
+                else:
+                    model_actions.append(route_result.strip())
+                    models.append(called_model_name)
+                cur_completion_tokens.append(completion_tokens_list.pop(0))
+            else:
+                model_actions.append('')
+                models.append('')
+                cur_completion_tokens.append(0.0)
         # print(f'len(route_results): {len(route_results)}')
         # print(f'len(completion_tokens_list): {len(completion_tokens_list)}')
         # print(f'len(called_model_names): {len(called_model_names)}')
         assert len(route_results) == 0
         assert len(completion_tokens_list) == 0
         assert len(called_model_names) == 0
-        # models = cur_actions
-        return next_obs, dones, valid_action, is_route, cur_completion_tokens, model_actions, models, route_format_valids
+        return cur_completion_tokens, model_actions, models, route_format_valids
 
     def _get_forced_route_model(self) -> str:
         """Optional eval hook: force every routed search call to a fixed backend model."""

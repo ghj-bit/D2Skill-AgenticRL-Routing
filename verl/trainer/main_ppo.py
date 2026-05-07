@@ -161,14 +161,13 @@ class TaskRunner:
             raise NotImplementedError
 
         reward_kwargs = {
-            "cost_coe": config.reward_model.get("cost_coe", 0.0),
             "cost_apply_on_nonpositive": config.reward_model.get("cost_apply_on_nonpositive", False),
             "cost_normalization_window": config.reward_model.get("cost_normalization_window", 1000),
             "cost_percentile_low": config.reward_model.get("cost_percentile_low", 0.05),
             "cost_percentile_high": config.reward_model.get("cost_percentile_high", 0.95),
             "cost_transform": config.reward_model.get("cost_transform", "sqrt"),
-            "success_reward_weight": config.reward_model.get("success_reward_weight", None),
-            "cost_reward_weight": config.reward_model.get("cost_reward_weight", None),
+            "success_reward_weight": config.reward_model.get("success_reward_weight", 1.0),
+            "cost_reward_weight": config.reward_model.get("cost_reward_weight", 1.0),
         }
         reward_fn = reward_manager_cls(
             tokenizer=tokenizer,

@@ -27,29 +27,23 @@ class EpisodeRewardManager:
         tokenizer,
         num_examine,
         normalize_by_length=False,
-        cost_coe=0.0,
         cost_apply_on_nonpositive=False,
         cost_normalization_window=1000,
         cost_percentile_low=0.05,
         cost_percentile_high=0.95,
         cost_transform="sqrt",
-        success_reward_weight=None,
-        cost_reward_weight=None,
+        success_reward_weight=1.0,
+        cost_reward_weight=1.0,
     ) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.normalize_by_length = normalize_by_length
-        self.cost_coe = float(cost_coe or 0.0)
         self.cost_apply_on_nonpositive = bool(cost_apply_on_nonpositive)
         self.cost_percentile_low = float(cost_percentile_low)
         self.cost_percentile_high = float(cost_percentile_high)
         self.cost_transform = cost_transform
-        self.success_reward_weight = float(
-            (1.0 - self.cost_coe) if success_reward_weight is None else success_reward_weight
-        )
-        self.cost_reward_weight = float(
-            self.cost_coe if cost_reward_weight is None else cost_reward_weight
-        )
+        self.success_reward_weight = float(success_reward_weight)
+        self.cost_reward_weight = float(cost_reward_weight)
         self._cost_eps = 1e-8
         self._cost_buffer = deque(maxlen=int(cost_normalization_window or 1000))
 
@@ -57,7 +51,8 @@ class EpisodeRewardManager:
         prompt_ids = data_item.batch['prompts']
         prompt_length = prompt_ids.shape[-1]
         response_ids = data_item.batch['responses']
-        valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+        response_mask = data_item.batch.get('loss_mask', data_item.batch['attention_mask'])
+        valid_response_length = response_mask[prompt_length:].sum()
         valid_response_ids = response_ids[:valid_response_length]
         return self.tokenizer.decode(valid_response_ids, skip_special_tokens=skip_special_tokens)
 
@@ -127,7 +122,8 @@ class EpisodeRewardManager:
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch['responses']
-            valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+            response_mask = data_item.batch.get('loss_mask', data_item.batch['attention_mask'])
+            valid_response_length = response_mask[prompt_length:].sum()
 
             # decode
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=False)
@@ -136,13 +132,6 @@ class EpisodeRewardManager:
             # ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
 
             data_source = data_item.non_tensor_batch['data_source']
-
-            extra_info = data_item.non_tensor_batch.get('extra_info', None)
-            multi_modal_inputs = data_item.non_tensor_batch.get('multi_modal_inputs', None)
-            if multi_modal_inputs is not None:
-                pixel_values = multi_modal_inputs['pixel_values']
-                image_grid_thw = multi_modal_inputs['image_grid_thw']
-
 
             api_cost = float(data_item.non_tensor_batch.get('api_costs', 0.0))
             action_valid = data_item.non_tensor_batch.get('is_action_valid', True)

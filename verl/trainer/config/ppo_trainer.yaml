@@ -230,10 +230,7 @@ reward_model:
   # base_reward is the D2Skill-style environment episode reward.
   # normalized_low_cost_reward is in [0, 5], where lower routing cost is better.
   # episode_reward = success_reward_weight * base_reward + cost_reward_weight * normalized_low_cost_reward
-  # If explicit weights are null, cost_coe is used for backward compatibility:
-  # success_reward_weight = 1 - cost_coe, cost_reward_weight = cost_coe.
   # By default only successful trajectories receive the cost term, so cheap failed trajectories are not encouraged.
-  cost_coe: 0.0
   success_reward_weight: 1.0
   cost_reward_weight: 1.0
   cost_apply_on_nonpositive: False

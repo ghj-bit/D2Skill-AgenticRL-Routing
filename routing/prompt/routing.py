@@ -1,4 +1,4 @@
-ROUTING_PROMPT_TEMPLATE = """
+ROUTING_PROMPT_TEMPLATE_ORIGINAL = """
     You are a routing agent that decides which language model to use for each step of a task.  \n
     Task: {task_description}  \
     You must choose between: \
@@ -20,6 +20,53 @@ ROUTING_PROMPT_TEMPLATE = """
     {current_observation} \
 
     For the next step, which model should be used?
+
+    ### Output Format (STRICT)
+    You MUST output in the following format inside <search> tags:
+    <search>model_name</search>
+
+    ### Rules:
+    - model_name must exactly match one candidate (case-sensitive if provided)
+    - DO NOT output anything else (no explanation, no punctuation, no extra words)
+    - DO NOT include "Candidate LLM" or any prefix/suffix
+    - Output exactly one tag
+"""
+
+ROUTING_PROMPT_TEMPLATE = """
+    You are a routing agent that decides which language model to use for each step of a task.  \n
+    Task: {task_description}  \
+    You must choose between: \
+    Description of LLM Candidates: {candidates_intro}
+
+    ====================
+    ## Retrieved Relevant Skills / Experience
+    ====================
+    The following skills or experiences were retrieved for this task and current situation.
+    Use them as evidence when deciding which model is most suitable for the next step.
+    If this section is empty, rely on the task, current observation, recent history, and candidate model descriptions.
+
+    {retrieved_memories}
+
+    ====================
+    ## Current Progress
+    ====================
+    The router has executed {step_count} step(s) for routing the LLM.
+
+    Previous Steps: \
+    Recent interaction history:
+    {action_history}
+
+    Current step: \
+    {current_step} \
+
+    Current observation: \
+    {current_observation} \
+
+    For the next step, choose the model by considering:
+    - the overall task goal
+    - the current observation and recent interaction history
+    - the retrieved skills / experiences above
+    - the candidate model descriptions
 
     ### Output Format (STRICT)
     You MUST output in the following format inside <search> tags:

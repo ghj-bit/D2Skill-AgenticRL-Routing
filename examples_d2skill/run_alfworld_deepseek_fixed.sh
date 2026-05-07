@@ -9,7 +9,6 @@ if [[ $# -gt 0 ]]; then
 fi
 
 export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
-export COST_COE="${COST_COE:-0.0}"
 
 bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     routing.force_model_enable=True \

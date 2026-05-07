@@ -425,6 +425,7 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 'result_obs': text_obs,
                 'action': actions,
                 'model': models if models else ['' for _ in range(len(actions))],
+                'routed_model_output': text_actions,
             }
         )
         self.pre_text_obs = text_obs
@@ -519,11 +520,11 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         for j, rec in enumerate(recent):
             step_num = start_idx + j + 1
             model_name = rec.get("model", "") or "none"
-            action_preview = self._short_preview(rec.get("action", ""))
+            routed_output_preview = self._short_preview(rec.get("routed_model_output", ""))
             result_preview = self._short_preview(rec.get("result_obs", rec.get("text_obs", "")))
             lines.append(
                 f"Step {step_num} [Model: {model_name}]: "
-                f"Action: {action_preview} "
+                f"Executed action: {routed_output_preview} "
                 f"Result: {result_preview}"
             )
         return "\n".join(lines)

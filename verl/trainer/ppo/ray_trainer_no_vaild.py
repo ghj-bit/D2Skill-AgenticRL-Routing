@@ -171,12 +171,10 @@ def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, 
     token_level_scores = data.batch["token_level_scores"]
     batch_size = data.batch.batch_size[0]
 
-    if multi_turn:
-        loss_mask = data.batch["loss_mask"]
-        response_mask = loss_mask[:, -response_length:]
+    if "loss_mask" in data.batch:
+        response_mask = data.batch["loss_mask"][:, -response_length:]
     else:
-        attention_mask = data.batch["attention_mask"]
-        response_mask = attention_mask[:, -response_length:]
+        response_mask = data.batch["attention_mask"][:, -response_length:]
 
     # compute kl between ref_policy and current policy
     # When apply_kl_penalty, algorithm.use_kl_in_reward=True, so the reference model has been enabled.
@@ -208,7 +206,8 @@ def apply_invalid_action_penalty(data: DataProto, invalid_action_penalty_coef=fl
 
         prompt_length = prompt_ids.shape[-1]
 
-        valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+        response_mask = data_item.batch.get('loss_mask', data_item.batch['attention_mask'])
+        valid_response_length = response_mask[prompt_length:].sum()
 
         action_valids = data_item.non_tensor_batch['is_action_valid'].astype(np.float32)
         action_invalids = torch.tensor(1 - action_valids, dtype=torch.float32, device=prompt_ids.device).squeeze(0)
@@ -238,6 +237,8 @@ def compute_response_mask(data: DataProto):
     responses = data.batch["responses"]
     response_length = responses.size(1)
     attention_mask = data.batch["attention_mask"]
+    if "loss_mask" in data.batch:
+        return data.batch["loss_mask"][:, -response_length:]
     return attention_mask[:, -response_length:]
 
 
@@ -1373,7 +1374,10 @@ class RayPPOTrainer:
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
                         with _timer("update_actor", timing_raw):
-                            batch.meta_info["multi_turn"] = self.config.actor_rollout_ref.rollout.multi_turn.enable
+                            batch.meta_info["multi_turn"] = (
+                                self.config.actor_rollout_ref.rollout.multi_turn.enable
+                                or "loss_mask" in batch.batch
+                            )
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
