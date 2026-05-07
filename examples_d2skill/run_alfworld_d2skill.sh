@@ -39,9 +39,8 @@ num_cpus_per_env_worker=0.1
 train_data_size=16
 val_data_size=16
 group_size=8
-cost_coe="${COST_COE:-0.5}"
-success_reward_weight="${SUCCESS_REWARD_WEIGHT:-$(python3 -c "print(1.0 - float('$cost_coe'))")}"
-cost_reward_weight="${COST_REWARD_WEIGHT:-$cost_coe}"
+success_reward_weight="${SUCCESS_REWARD_WEIGHT:-1.0}"
+cost_reward_weight="${COST_REWARD_WEIGHT:-1.0}"
 
 # ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-4B-Instruct-2507"
 ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/public/Models/Qwen/Qwen2.5-7B-Instruct"
@@ -88,7 +87,6 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.use_invalid_action_penalty=True \
     actor_rollout_ref.actor.invalid_action_penalty_coef=1.0 \
-    reward_model.cost_coe=$cost_coe \
     reward_model.success_reward_weight=$success_reward_weight \
     reward_model.cost_reward_weight=$cost_reward_weight \
     algorithm.use_kl_in_reward=False \

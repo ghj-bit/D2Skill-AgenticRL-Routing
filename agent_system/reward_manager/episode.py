@@ -17,9 +17,6 @@ from verl import DataProto
 import torch
 import numpy as np
 from collections import deque
-import re
-
-from routing.models_config.models_config import MODEL_CONF
 
 class EpisodeRewardManager:
     """The reward manager.
@@ -55,8 +52,6 @@ class EpisodeRewardManager:
         )
         self._cost_eps = 1e-8
         self._cost_buffer = deque(maxlen=int(cost_normalization_window or 1000))
-        self._valid_route_models = set(MODEL_CONF.keys())
-        self._route_format_pattern = re.compile(r"^<search>([^<>\r\n]+)</search>$")
 
     def _decode_valid_response(self, data_item, skip_special_tokens: bool) -> str:
         prompt_ids = data_item.batch['prompts']
@@ -65,22 +60,6 @@ class EpisodeRewardManager:
         valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
         valid_response_ids = response_ids[:valid_response_length]
         return self.tokenizer.decode(valid_response_ids, skip_special_tokens=skip_special_tokens)
-
-    def _route_format_valid(self, response: str) -> bool:
-        match = self._route_format_pattern.fullmatch((response or "").strip())
-        if not match:
-            return False
-        return match.group(1) in self._valid_route_models
-
-    def _collect_invalid_format_trajs(self, data: DataProto) -> set:
-        invalid_trajs = set()
-        for i in range(len(data)):
-            data_item = data[i]
-            traj_uid = data_item.non_tensor_batch.get('traj_uid', i)
-            response = self._decode_valid_response(data_item, skip_special_tokens=True)
-            if not self._route_format_valid(response):
-                invalid_trajs.add(traj_uid)
-        return invalid_trajs
 
     def _preprocess_cost(self, cost: float) -> float:
         cost = max(float(cost), 0.0)
@@ -91,7 +70,7 @@ class EpisodeRewardManager:
         return cost
 
     def _normalize_cost_reward(self, cost: float) -> float:
-        """Return a Router-R1-style reward where lower routing cost is better."""
+        """Return a Router-R1-style reward in [0, 5] where lower routing cost is better."""
         processed = self._preprocess_cost(cost)
         self._cost_buffer.append(processed)
         arr = np.asarray(self._cost_buffer, dtype=np.float64)
@@ -104,22 +83,18 @@ class EpisodeRewardManager:
 
         denom = cost_max - cost_min
         if denom < self._cost_eps:
-            return 0.5
+            return 2.5
 
         scaled = (processed - cost_min) / denom
-        return 1.0 - float(np.clip(scaled, 0.0, 1.0))
+        return 5.0 * (1.0 - float(np.clip(scaled, 0.0, 1.0)))
 
-    def _episode_success_reward(self, data_item) -> float:
-        """Return binary episode outcome reward: success=1, failure=0."""
-        if "success_per_traj" in data_item.non_tensor_batch:
-            success = float(data_item.non_tensor_batch["success_per_traj"])
-            return 1.0 if success > 0.0 else 0.0
-
+    def _episode_base_reward(self, data_item) -> float:
+        """Return the D2Skill-style environment episode reward."""
         episode_rewards = float(data_item.non_tensor_batch["episode_rewards"])
         if self.normalize_by_length:
             episode_lengths = float(data_item.non_tensor_batch["episode_lengths"])
             episode_rewards = episode_rewards / max(episode_lengths, 1.0)
-        return 1.0 if episode_rewards > 0.0 else 0.0
+        return episode_rewards
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
@@ -175,7 +150,7 @@ class EpisodeRewardManager:
                 format_valid = bool(np.asarray(action_valid).reshape(-1)[0])
             except Exception:
                 format_valid = bool(action_valid)
-            base_score = self._episode_success_reward(data_item)
+            base_score = self._episode_base_reward(data_item)
             cost_reward = self._normalize_cost_reward(api_cost)
             format_reward = 0.0 if format_valid else -1.0
             if self.cost_reward_weight > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):

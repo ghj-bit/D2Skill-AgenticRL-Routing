@@ -249,8 +249,7 @@ def apply_invalid_action_penalty(
         valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
 
         action_valids = data_item.non_tensor_batch['is_action_valid'].astype(np.float32)
-        # Step valid only when BOTH think and action are valid; otherwise penalize (same pattern as action-only)
-        step_valid = float(action_valids) if action_valids.ndim == 0 else float(action_valids.item())
+        action_invalids = torch.tensor(1 - action_valids, dtype=torch.float32, device=prompt_ids.device).squeeze(0)
         if use_think_penalty and tokenizer is not None:
             response_ids = data_item.batch['responses']
             response_length = int(valid_response_length.item())
@@ -259,14 +258,12 @@ def apply_invalid_action_penalty(
                 response_ids_trim = response_ids_trim.cpu().tolist()
             response_text = tokenizer.decode(response_ids_trim, skip_special_tokens=False)
             if not _has_think_block(response_text):
-                step_valid = 0.0
-        step_invalids = torch.tensor(1.0 - step_valid, dtype=torch.float32, device=prompt_ids.device)
-        if step_invalids.item() > 0:
-            reward_tensor[i, valid_response_length - 1] = -invalid_action_penalty_coef
+                action_invalids = torch.ones_like(action_invalids)
+        # invalid action penalty, same additive design as verl-agent
+        reward_tensor[i, valid_response_length - 1] -= invalid_action_penalty_coef * action_invalids
 
         if 'step_rewards' in data.batch.keys():
-            if step_invalids.item() > 0:
-                step_rewards[i] = -invalid_action_penalty_coef
+            step_rewards[i] -= invalid_action_penalty_coef * action_invalids
 
     valid_action_ratio = np.mean(data.non_tensor_batch['is_action_valid'].astype(np.float32)).item()
     metrics = {'episode/valid_action_ratio': valid_action_ratio}

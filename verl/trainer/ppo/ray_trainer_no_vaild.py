@@ -214,12 +214,10 @@ def apply_invalid_action_penalty(data: DataProto, invalid_action_penalty_coef=fl
         action_invalids = torch.tensor(1 - action_valids, dtype=torch.float32, device=prompt_ids.device).squeeze(0)
         # invalid action penalty
         # assert reward_tensor[i, valid_response_length - 1] != 0.0, f'i={i}'
-        if action_invalids.item() > 0:
-            reward_tensor[i, valid_response_length - 1] = -invalid_action_penalty_coef
+        reward_tensor[i, valid_response_length - 1] -= invalid_action_penalty_coef * action_invalids
 
         if 'step_rewards' in data.batch.keys():
-            if action_invalids.item() > 0:
-                step_rewards[i] = -invalid_action_penalty_coef
+            step_rewards[i] -= invalid_action_penalty_coef * action_invalids
     
     valid_action_ratio = np.mean(data.non_tensor_batch['is_action_valid'].astype(np.float32)).item()
     metrics = {'episode/valid_action_ratio': valid_action_ratio}
