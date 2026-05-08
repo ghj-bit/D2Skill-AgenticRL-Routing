@@ -717,7 +717,10 @@ class RayPPOTrainer:
         if interval <= 1:
             return True
         step = self.global_steps if step is None else step
-        return int(step) % interval == 0
+        step = int(step)
+        if step <= 5:
+            return True
+        return step % interval == 0
 
     @staticmethod
     def _compact_llm_metadata(llm_metadata: dict) -> dict:

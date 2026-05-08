@@ -25,8 +25,7 @@ from agent_system.multi_turn_rollout.utils import process_image, to_list_of_dict
 from agent_system.environments import EnvironmentManagerBase
 from typing import List, Dict, Any, Optional
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
-from routing.llm_agent.route_service import access_routing_pool
-from routing.models_config.models_config import MODEL_CONF
+from routing.llm_agent.route_service import access_routing_pool, check_llm_name
 import re
 from typing import List, Dict, Any, Tuple
 import logging
@@ -885,14 +884,15 @@ class TrajectoryCollector:
         if not match:
             return None, "", False
         model_name = match.group(1).strip()
+        llm_name, _ = check_llm_name(model_name)
         projected = f"<search>{model_name}</search>"
         valid = (
             original == projected
             and len(re.findall(r"<search>", original)) == 1
             and not re.search(r"</?answer>", original)
-            and model_name in MODEL_CONF
+            and bool(llm_name)
         )
-        return ("search" if valid else None), (model_name if valid else ""), valid
+        return ("search" if valid else None), (llm_name if valid else ""), valid
 
     def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[str], List[str], List[bool]]:
         """

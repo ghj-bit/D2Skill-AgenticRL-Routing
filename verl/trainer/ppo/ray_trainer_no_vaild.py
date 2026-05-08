@@ -678,6 +678,8 @@ class RayPPOTrainer:
             current_step = int(current_step)
         except (TypeError, ValueError):
             return True
+        if current_step <= 5:
+            return True
         return current_step % interval == 0
 
     def _maybe_log_val_generations(self, inputs, outputs, scores):

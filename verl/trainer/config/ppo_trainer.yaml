@@ -281,7 +281,7 @@ trainer:
   log_val_generations: 0
   rollout_data_dir: null # directory for logging the rollout data, no dump if null
   validation_data_dir: null # directory for logging the validation data, no dump if null
-  step_file_dump_interval: 5 # write diagnostic step files every N global steps; set 1 to write every step
+  step_file_dump_interval: 5 # write step files for steps 0-5, then every N global steps; set 1 to write every step
   nnodes: 1
   n_gpus_per_node: 8
   save_freq: -1
