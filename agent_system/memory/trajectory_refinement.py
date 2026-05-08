@@ -80,8 +80,8 @@ def build_refined_trajectory(
                 {
                     "observation": str,
                     "router_action": str,
-                    "model_action": str,
-                    "raw_output": str
+                    "raw_output": str,
+                    "model_action": str
                 },
                 ...
             ]
@@ -102,8 +102,8 @@ def build_refined_trajectory(
         turns.append({
             "observation": obs.strip(),
             "router_action": router_action,
-            "model_action": model_action,
             "raw_output": raw_output,
+            "model_action": model_action,
         })
     return {
         "task": (task_short or "").strip(),

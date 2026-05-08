@@ -565,7 +565,10 @@ class TrajectoryCollector:
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
             model_call_success = np.array(model_call_success, dtype=bool)
-            batch.non_tensor_batch['router_actions'] = np.array(route_actions_str, dtype=object)
+            batch.non_tensor_batch['router_actions'] = np.array(
+                [self._router_action_for_record(action) for action in route_actions_str],
+                dtype=object,
+            )
             batch.non_tensor_batch['route_format_valid'] = route_format_valid
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
             batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
@@ -882,6 +885,15 @@ class TrajectoryCollector:
         if "</answer>" in action:
             return action.split("</answer>", 1)[0] + "</answer>"
         return action
+
+    @staticmethod
+    def _router_action_for_record(action: str) -> str:
+        text = (action or "").strip()
+        match = re.search(r"<search>(.*?)</search>", text, re.DOTALL)
+        if not match:
+            return text
+        model_name = match.group(1).strip()
+        return f"<search>{model_name}</search>"
 
     @staticmethod
     def _project_route_action(prediction: str) -> Tuple[str, str, bool]:
