@@ -17,6 +17,8 @@ from verl import DataProto
 import torch
 import numpy as np
 from collections import deque
+import re
+from routing.llm_agent.route_service import check_llm_name
 
 class EpisodeRewardManager:
     """The reward manager.
@@ -91,6 +93,17 @@ class EpisodeRewardManager:
             episode_rewards = episode_rewards / max(episode_lengths, 1.0)
         return episode_rewards
 
+    @staticmethod
+    def _route_format_valid(response: str) -> bool:
+        match = re.fullmatch(r"\s*<search>(.*?)</search>\s*", response or "", flags=re.DOTALL)
+        if match is None:
+            return False
+        model_name = match.group(1).strip()
+        if not model_name:
+            return False
+        llm_name, _ = check_llm_name(model_name)
+        return bool(llm_name)
+
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
 
@@ -134,11 +147,7 @@ class EpisodeRewardManager:
             data_source = data_item.non_tensor_batch['data_source']
 
             api_cost = float(data_item.non_tensor_batch.get('api_costs', 0.0))
-            action_valid = data_item.non_tensor_batch.get('is_action_valid', True)
-            try:
-                format_valid = bool(np.asarray(action_valid).reshape(-1)[0])
-            except Exception:
-                format_valid = bool(action_valid)
+            format_valid = self._route_format_valid(response_str)
             base_score = self._episode_base_reward(data_item)
             cost_reward = self._normalize_cost_reward(api_cost)
             format_reward = 0.0 if format_valid else -1.0

@@ -168,6 +168,7 @@ def request_task(data):
 
 
 def check_llm_name(target_llm):
+    target_llm = str(target_llm or "").strip().lower()
     TAU = 0
     LLM_NAME = ""
     # if "qwen" in target_llm:
