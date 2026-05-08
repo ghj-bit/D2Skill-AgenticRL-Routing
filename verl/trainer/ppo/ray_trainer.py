@@ -1853,6 +1853,7 @@ class RayPPOTrainer:
             query_texts_batch = batch.non_tensor_batch.get('query_text') if batch is not None else None
             model_actions_batch = batch.non_tensor_batch.get('model_actions') if batch is not None else None
             router_actions_batch = batch.non_tensor_batch.get('router_actions') if batch is not None else None
+            model_call_success_batch = batch.non_tensor_batch.get('model_call_success') if batch is not None else None
             api_costs_batch = batch.non_tensor_batch.get('api_costs') if batch is not None else None
             success_per_traj_batch = batch.non_tensor_batch.get('success_per_traj') if batch is not None else None
             traj_dict = {}
@@ -1866,6 +1867,7 @@ class RayPPOTrainer:
                         'observations': [],
                         'query_texts': [],
                         'model_actions': [],
+                        'model_call_success': [],
                         'api_costs': [],
                         'scores': [],
                         'indices': []
@@ -1887,6 +1889,10 @@ class RayPPOTrainer:
                     traj_dict[traj_uid]['model_actions'].append(ma if isinstance(ma, str) else str(ma))
                 else:
                     traj_dict[traj_uid]['model_actions'].append("")
+                if model_call_success_batch is not None and idx < len(model_call_success_batch):
+                    traj_dict[traj_uid]['model_call_success'].append(bool(model_call_success_batch[idx]))
+                else:
+                    traj_dict[traj_uid]['model_call_success'].append(False)
                 if api_costs_batch is not None and idx < len(api_costs_batch):
                     try:
                         traj_dict[traj_uid]['api_costs'].append(float(api_costs_batch[idx]))
@@ -2069,6 +2075,7 @@ class RayPPOTrainer:
                     obs_list = traj_data.get('observations', [])
                 router_actions = traj_data.get('outputs', [])
                 raw_outputs = traj_data.get('model_actions', [])
+                model_call_success = traj_data.get('model_call_success', [])
                 turn_count = max(len(obs_list), len(router_actions), len(raw_outputs))
                 if turn_count > 0:
                     detailed_task = extract_task_from_first_observation(obs_list) or task_short or initial_prompt
@@ -2078,8 +2085,9 @@ class RayPPOTrainer:
                             {
                                 'observation': obs_list[i] if i < len(obs_list) else "",
                                 'router_action': router_actions[i] if i < len(router_actions) else "",
-                                'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
+                                'model_call_success': model_call_success[i] if i < len(model_call_success) else False,
                                 'raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
+                                'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
                             }
                             for i in range(turn_count)
                         ],

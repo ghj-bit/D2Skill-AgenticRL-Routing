@@ -560,14 +560,16 @@ class TrajectoryCollector:
             batch = batch.union(batch_output)
             route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
             # print(f'路由器输出：{route_actions_str}')
-            cur_completion_tokens, text_model_actions, models, route_format_valid = self.execute_predictions(
+            cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success = self.execute_predictions(
                 route_actions_str, original_obs
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
+            model_call_success = np.array(model_call_success, dtype=bool)
             batch.non_tensor_batch['router_actions'] = np.array(route_actions_str, dtype=object)
             batch.non_tensor_batch['route_format_valid'] = route_format_valid
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
             batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
+            batch.non_tensor_batch['model_call_success'] = model_call_success
             batch = self.append_routed_model_outputs(batch, route_actions_str, text_model_actions)
             # print(f"路由模型执行动作：{text_model_actions}")
             next_obs, next_route_obs, rewards, dones, infos = envs.step(text_model_actions, models)
@@ -789,6 +791,7 @@ class TrajectoryCollector:
         """
         model_actions = []
         models = []
+        model_call_success = []
         # 预处理router输出结果，获得content = model:query 
         #但现在只有model
         cur_actions, contents, route_format_valids = self.postprocess_predictions(predictions)
@@ -838,16 +841,20 @@ class TrajectoryCollector:
                 if route_result_lower == "llm name error":
                     model_actions.append('')
                     models.append('')
+                    model_call_success.append(False)
                 elif route_result_lower == "api request error":
                     model_actions.append('')
                     models.append(called_model_name)
+                    model_call_success.append(False)
                 else:
                     model_actions.append(route_result.strip())
                     models.append(called_model_name)
+                    model_call_success.append(True)
                 cur_completion_tokens.append(completion_tokens_list.pop(0))
             else:
                 model_actions.append('')
                 models.append('')
+                model_call_success.append(False)
                 cur_completion_tokens.append(0.0)
         # print(f'len(route_results): {len(route_results)}')
         # print(f'len(completion_tokens_list): {len(completion_tokens_list)}')
@@ -855,7 +862,7 @@ class TrajectoryCollector:
         assert len(route_results) == 0
         assert len(completion_tokens_list) == 0
         assert len(called_model_names) == 0
-        return cur_completion_tokens, model_actions, models, route_format_valids
+        return cur_completion_tokens, model_actions, models, route_format_valids, model_call_success
 
     def _get_forced_route_model(self) -> str:
         """Optional eval hook: force every routed search call to a fixed backend model."""
