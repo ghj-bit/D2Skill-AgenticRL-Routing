@@ -916,6 +916,11 @@ class RayPPOTrainer:
             traj_uids = test_output_gen_batch.non_tensor_batch.get('traj_uid', [])
             output_ids = test_output_gen_batch.batch["responses"]
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
+            router_actions_batch = test_output_gen_batch.non_tensor_batch.get("router_actions")
+            router_output_texts = [
+                x if isinstance(x, str) else str(x)
+                for x in router_actions_batch
+            ] if router_actions_batch is not None and len(router_actions_batch) == len(output_texts) else output_texts
             
             # Try to extract observations from input_ids if available
             # For environment interactions, we want to show: Observation -> Action
@@ -932,7 +937,7 @@ class RayPPOTrainer:
             
             # Group outputs and observations by trajectory to form complete dialogue history
             traj_to_turns = {}  # {traj_uid: [(obs, action), ...]}
-            for i, (uid, action) in enumerate(zip(traj_uids, output_texts)):
+            for i, (uid, action) in enumerate(zip(traj_uids, router_output_texts)):
                 if uid not in traj_to_turns:
                     traj_to_turns[uid] = []
                 obs = observation_texts[i] if i < len(observation_texts) else ""
@@ -1006,12 +1011,12 @@ class RayPPOTrainer:
                     input_per_step.append(input_texts[0] if input_texts else "N/A")
             scores_per_step = reward_tensor.cpu().tolist() if reward_tensor.dim() == 1 else reward_tensor.sum(-1).cpu().tolist()
             failed_this_batch = self._collect_failed_trajectories(
-                input_per_step, output_texts, scores_per_step, batch=test_batch,
+                input_per_step, router_output_texts, scores_per_step, batch=test_batch,
                 with_skills_mask=test_batch.non_tensor_batch.get("with_skills_mask"),
             )
             all_failed_trajectories.extend(failed_this_batch)
             successful_this_batch = self._collect_successful_trajectories(
-                input_per_step, output_texts, scores_per_step, batch=test_batch,
+                input_per_step, router_output_texts, scores_per_step, batch=test_batch,
                 with_skills_mask=test_batch.non_tensor_batch.get("with_skills_mask"),
             )
             all_successful_trajectories.extend(successful_this_batch)
@@ -1847,6 +1852,7 @@ class RayPPOTrainer:
             # Group by traj_uid to reconstruct full trajectories (include query_text per step for retrieval_obs)
             query_texts_batch = batch.non_tensor_batch.get('query_text') if batch is not None else None
             model_actions_batch = batch.non_tensor_batch.get('model_actions') if batch is not None else None
+            router_actions_batch = batch.non_tensor_batch.get('router_actions') if batch is not None else None
             api_costs_batch = batch.non_tensor_batch.get('api_costs') if batch is not None else None
             success_per_traj_batch = batch.non_tensor_batch.get('success_per_traj') if batch is not None else None
             traj_dict = {}
@@ -1865,7 +1871,11 @@ class RayPPOTrainer:
                         'indices': []
                     }
                 traj_dict[traj_uid]['inputs'].append(inp)
-                traj_dict[traj_uid]['outputs'].append(out)
+                if router_actions_batch is not None and idx < len(router_actions_batch):
+                    router_out = router_actions_batch[idx]
+                    traj_dict[traj_uid]['outputs'].append(router_out if isinstance(router_out, str) else str(router_out))
+                else:
+                    traj_dict[traj_uid]['outputs'].append(out)
                 traj_dict[traj_uid]['observations'].append(observation_texts[idx] if idx < len(observation_texts) else "")
                 if query_texts_batch is not None and idx < len(query_texts_batch):
                     qt = query_texts_batch[idx]
@@ -2069,6 +2079,7 @@ class RayPPOTrainer:
                                 'observation': obs_list[i] if i < len(obs_list) else "",
                                 'router_action': router_actions[i] if i < len(router_actions) else "",
                                 'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
+                                'raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
                             }
                             for i in range(turn_count)
                         ],
@@ -2823,6 +2834,12 @@ class RayPPOTrainer:
                             _inp = batch.batch["prompts"] if "prompts" in batch.batch else batch.batch["input_ids"]
                             _train_inputs = self.tokenizer.batch_decode(_inp, skip_special_tokens=True)
                             _train_outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                            router_actions_batch = batch.non_tensor_batch.get("router_actions")
+                            if router_actions_batch is not None and len(router_actions_batch) == len(_train_outputs):
+                                _train_outputs = [
+                                    x if isinstance(x, str) else str(x)
+                                    for x in router_actions_batch
+                                ]
                             success_per_traj = batch.non_tensor_batch.get("success_per_traj")
                             ep_rew = batch.non_tensor_batch.get("episode_rewards")
                             score_source = success_per_traj if success_per_traj is not None else ep_rew
