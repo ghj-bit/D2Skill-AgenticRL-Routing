@@ -84,7 +84,7 @@ def are_similar(a: str, b: str, threshold: float = 0.95) -> bool:
         raise ValueError("Only text-based observations are supported for similarity-based GiGPO in this version.")
     return SequenceMatcher(None, a, b).ratio() >= threshold
 
-def compute_step_discounted_returns(batch: DataProto, gamma: float):
+def compute_step_discounted_returns(batch: DataProto, gamma: float, rewards=None):
     """
     Compute discounted returns for each trajectory. (Eq. 5 in the paper)
     
@@ -95,7 +95,7 @@ def compute_step_discounted_returns(batch: DataProto, gamma: float):
     Returns:
         torch.Tensor: Discounted returns.
     """
-    rewards = batch.non_tensor_batch['rewards'].astype(np.float32)
+    rewards = batch.non_tensor_batch['rewards'].astype(np.float32) if rewards is None else np.asarray(rewards, dtype=np.float32)
     traj_uids = batch.non_tensor_batch['traj_uid']
     active_masks = batch.non_tensor_batch['active_masks'].astype(np.float32)
     returns_by_traj = {}

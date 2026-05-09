@@ -570,7 +570,10 @@ class RayPPOTrainer:
         # check multi_turn with tool config
         if config.actor_rollout_ref.rollout.multi_turn.enable:
             assert config.actor_rollout_ref.rollout.multi_turn.tool_config_path is not None, "tool_config_path must be set when enabling multi_turn with tool, due to no role-playing support"
-            assert config.algorithm.adv_estimator in [AdvantageEstimator.GRPO], "only GRPO is tested for multi-turn with tool"
+            assert config.algorithm.adv_estimator in [
+                AdvantageEstimator.GRPO,
+                AdvantageEstimator.GiGPO,
+            ], "only GRPO/GiGPO are tested for multi-turn with tool"
 
         print("[validate_config] All configuration checks passed successfully!")
 
@@ -1238,13 +1241,6 @@ class RayPPOTrainer:
                     del batch
                     batch = gen_batch_output
 
-                    if self.config.algorithm.adv_estimator == AdvantageEstimator.GiGPO:
-                        step_rewards_tensor = core_gigpo.compute_step_discounted_returns(
-                            batch=batch,
-                            gamma=self.config.algorithm.gamma
-                        )
-                        batch.batch['step_rewards'] = step_rewards_tensor
-                    
                     batch = adjust_batch(self.config, batch)
 
                     batch.batch["response_mask"] = compute_response_mask(batch)
@@ -1343,6 +1339,18 @@ class RayPPOTrainer:
                             metrics.update(kl_metrics)
                         else:
                             batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
+
+                        if self.config.algorithm.adv_estimator == AdvantageEstimator.GiGPO:
+                            if "step_rewards" not in reward_extra_infos_dict:
+                                raise KeyError("GiGPO requires reward_extra_info['step_rewards']")
+                            batch.batch["step_rewards"] = core_gigpo.compute_step_discounted_returns(
+                                batch=batch,
+                                gamma=self.config.algorithm.gamma,
+                                rewards=np.asarray(reward_extra_infos_dict["step_rewards"], dtype=np.float32),
+                            ).to(
+                                dtype=torch.float32,
+                                device=batch.batch["responses"].device,
+                            )
 
                         # compute advantages, executed on the driver process
 

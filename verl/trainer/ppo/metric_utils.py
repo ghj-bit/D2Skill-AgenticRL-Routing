@@ -242,7 +242,16 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             }
         ),
     }
-    for key in ["base_episode_rewards", "api_costs", "cost_rewards", "format_rewards", "final_rewards"]:
+    for key in [
+        "base_episode_rewards",
+        "api_costs",
+        "cost_rewards",
+        "step_api_costs",
+        "step_cost_rewards",
+        "format_rewards",
+        "step_rewards",
+        "final_rewards",
+    ]:
         if key in batch.non_tensor_batch:
             values = np.asarray(batch.non_tensor_batch[key], dtype=np.float32).reshape(-1)
             if values.size > 0:

@@ -47,7 +47,9 @@ class EpisodeRewardManager:
         self.success_reward_weight = float(success_reward_weight)
         self.cost_reward_weight = float(cost_reward_weight)
         self._cost_eps = 1e-8
-        self._cost_buffer = deque(maxlen=int(cost_normalization_window or 1000))
+        cost_buffer_size = int(cost_normalization_window or 1000)
+        self._episode_cost_buffer = deque(maxlen=cost_buffer_size)
+        self._step_cost_buffer = deque(maxlen=cost_buffer_size)
 
     def _decode_valid_response(self, data_item, skip_special_tokens: bool) -> str:
         prompt_ids = data_item.batch['prompts']
@@ -66,11 +68,11 @@ class EpisodeRewardManager:
             return float(np.sqrt(cost))
         return cost
 
-    def _normalize_cost_reward(self, cost: float) -> float:
+    def _normalize_cost_reward(self, cost: float, buffer: deque) -> float:
         """Return a Router-R1-style reward in [0, 5] where lower routing cost is better."""
         processed = self._preprocess_cost(cost)
-        self._cost_buffer.append(processed)
-        arr = np.asarray(self._cost_buffer, dtype=np.float64)
+        buffer.append(processed)
+        arr = np.asarray(buffer, dtype=np.float64)
         if arr.size >= 2:
             cost_min = np.percentile(arr, 100 * self.cost_percentile_low)
             cost_max = np.percentile(arr, 100 * self.cost_percentile_high)
@@ -119,7 +121,10 @@ class EpisodeRewardManager:
             "base_episode_rewards": [],
             "api_costs": [],
             "cost_rewards": [],
+            "step_api_costs": [],
+            "step_cost_rewards": [],
             "format_rewards": [],
+            "step_rewards": [],
             "final_rewards": [],
         }
         already_print_data_sources = {}
@@ -147,10 +152,13 @@ class EpisodeRewardManager:
             data_source = data_item.non_tensor_batch['data_source']
 
             api_cost = float(data_item.non_tensor_batch.get('api_costs', 0.0))
+            step_api_cost = float(data_item.non_tensor_batch.get('step_api_costs', api_cost))
             format_valid = self._route_format_valid(response_str)
             base_score = self._episode_base_reward(data_item)
-            cost_reward = self._normalize_cost_reward(api_cost)
+            cost_reward = self._normalize_cost_reward(api_cost, self._episode_cost_buffer)
+            step_cost_reward = self._normalize_cost_reward(step_api_cost, self._step_cost_buffer)
             format_reward = 0.0 if format_valid else -1.0
+            step_reward = float(step_cost_reward) if format_valid else -1.0
             if self.cost_reward_weight > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
                 score = float(base_score) * self.success_reward_weight + cost_reward * self.cost_reward_weight
             else:
@@ -159,7 +167,10 @@ class EpisodeRewardManager:
             reward_extra_info["base_episode_rewards"].append(float(base_score))
             reward_extra_info["api_costs"].append(api_cost)
             reward_extra_info["cost_rewards"].append(float(cost_reward))
+            reward_extra_info["step_api_costs"].append(step_api_cost)
+            reward_extra_info["step_cost_rewards"].append(float(step_cost_reward))
             reward_extra_info["format_rewards"].append(float(format_reward))
+            reward_extra_info["step_rewards"].append(float(step_reward))
             reward_extra_info["final_rewards"].append(float(score))
 
             if data_source not in already_print_data_sources:
@@ -172,7 +183,10 @@ class EpisodeRewardManager:
                 print(f"[{data_source}][base_score]", base_score)
                 print(f"[{data_source}][api_cost]", api_cost)
                 print(f"[{data_source}][cost_reward]", cost_reward)
+                print(f"[{data_source}][step_api_cost]", step_api_cost)
+                print(f"[{data_source}][step_cost_reward]", step_cost_reward)
                 print(f"[{data_source}][format_valid]", format_valid)
+                print(f"[{data_source}][step_reward]", step_reward)
                 print(f"[{data_source}][score]", score)
 
         if return_dict:

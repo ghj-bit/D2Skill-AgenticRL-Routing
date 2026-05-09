@@ -606,6 +606,7 @@ class TrajectoryCollector:
 
             assert len(rewards) == batch_size, f"env should return rewards for all environments, got {len(rewards)} rewards for {batch_size} environments"
             batch.non_tensor_batch['rewards'] = torch_to_numpy(rewards, is_object=True)
+            batch.non_tensor_batch['step_api_costs'] = np.asarray(cur_completion_tokens, dtype=np.float32).copy()
             batch.non_tensor_batch['api_costs'] = api_costs.copy()
             batch.non_tensor_batch['active_masks'] = torch_to_numpy(active_masks, is_object=True)
             # Update episode lengths for active environments
