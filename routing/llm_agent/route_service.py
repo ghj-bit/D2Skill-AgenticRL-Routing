@@ -77,7 +77,7 @@ def get_llm_response_via_api(prompt,
 
 
 # API_PRICE_1M_TOKENS = {
-#     "qwen/qwen2.5-7b-instruct": 0.3,
+#     "qwen/qwen3-8b-instruct": 0.3,
 #     "meta/llama-3.1-70b-instruct": 0.88,
 #     "meta/llama-3.1-8b-instruct": 0.18,
 #     "mistralai/mistral-7b-instruct-v0.3": 0.2,
@@ -89,7 +89,7 @@ def get_llm_response_via_api(prompt,
 
 
 API_PRICE_1M_TOKENS = {
-    "qwen2.5-7B": 0.1,
+    "qwen3-8B": 0.1,
     "deepseek": 0.88,
 }
 
@@ -172,7 +172,7 @@ def check_llm_name(target_llm):
     TAU = 0
     LLM_NAME = ""
     # if "qwen" in target_llm:
-    #     LLM_NAME = "qwen/qwen2.5-7b-instruct"
+    #     LLM_NAME = "qwen/qwen3-8b-instruct"
     # elif "palmyra" in target_llm or "creative" in target_llm:
     #     LLM_NAME = "writer/palmyra-creative-122b"
     # elif "llama" in target_llm:
@@ -202,8 +202,8 @@ def check_llm_name(target_llm):
     # else:
     #     # print("!!!!!!!!!!!LLM Name Error!!!!!!!!!!!", target_llm)
     #     LLM_NAME = ""
-    if "qwen2.5" in target_llm or "qwen" in target_llm:
-        LLM_NAME = "qwen2.5-7B"
+    if "qwen3" in target_llm or target_llm in {"qwen", "qwen-8b", "qwen8b"}:
+        LLM_NAME = "qwen3-8B"
     elif "deepseek" in target_llm:
         LLM_NAME = "deepseek"
     else:

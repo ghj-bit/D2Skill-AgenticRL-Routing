@@ -1,9 +1,8 @@
 MODELS_INTRODTION = """
-    **Qwen2.5-7B-Instruct**:  
-    Qwen2.5-7B-Instruct is a powerful Chinese-English instruction-tuned large language model designed for tasks in \
-    language, coding, mathematics, and reasoning. As part of the Qwen2.5 series, it features enhanced knowledge,  \
-    stronger coding and math abilities, improved instruction following, better handling of long and structured texts, \
-    and supports up to 128K context tokens. It also offers multilingual capabilities across over 29 languages. 
+    **Qwen3-8B**:
+    Qwen3-8B is a strong Chinese-English instruction-tuned large language model designed for tasks in \
+    language, coding, mathematics, and reasoning. As part of the Qwen3 series, it features improved reasoning, \
+    instruction following, multilingual ability, and structured response generation for agentic decision-making.
     
     **Deepseek-v3.2**:
     Deepseek-v3.2 is a cutting-edge large language model developed by DeepSeek, \
