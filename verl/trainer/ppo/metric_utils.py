@@ -242,24 +242,25 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             }
         ),
     }
-    for key in [
-        "base_episode_rewards",
-        "api_costs",
-        "cost_rewards",
-        "step_api_costs",
-        "step_cost_rewards",
-        "format_rewards",
-        "step_rewards",
-        "final_rewards",
-    ]:
+    extra_metric_prefix = {
+        "base_episode_rewards": "episode",
+        "api_costs": "episode",
+        "cost_rewards": "episode",
+        "final_rewards": "episode",
+        "step_api_costs": "step",
+        "step_cost_rewards": "step",
+        "format_rewards": "step",
+        "step_rewards": "step",
+    }
+    for key, prefix in extra_metric_prefix.items():
         if key in batch.non_tensor_batch:
             values = np.asarray(batch.non_tensor_batch[key], dtype=np.float32).reshape(-1)
             if values.size > 0:
-                metrics[f"episode/{key}/mean"] = float(np.mean(values))
-                metrics[f"episode/{key}/max"] = float(np.max(values))
-                metrics[f"episode/{key}/min"] = float(np.min(values))
+                metrics[f"{prefix}/{key}/mean"] = float(np.mean(values))
+                metrics[f"{prefix}/{key}/max"] = float(np.max(values))
+                metrics[f"{prefix}/{key}/min"] = float(np.min(values))
                 if key == "format_rewards":
-                    metrics["episode/format_invalid_rate"] = float(np.mean(values < 0))
+                    metrics["step/format_invalid_rate"] = float(np.mean(values < 0))
     metrics.update(compute_model_call_metrics(batch.non_tensor_batch, prefix="episode"))
     return metrics
 
