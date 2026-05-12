@@ -688,7 +688,7 @@ class RayPPOTrainer:
         except Exception as e:
             print(f"Warning: Could not set total_training_steps in config. Structure missing? Error: {e}")
 
-    def _dump_generations(self, inputs, outputs, scores, reward_extra_infos_dict, dump_path):
+    def _dump_generations(self, inputs, outputs, scores, reward_extra_infos_dict, dump_path, extra_infos_dict=None):
         """Dump rollout/validation samples as JSONL."""
         if not self._should_dump_step_file():
             return
@@ -705,6 +705,9 @@ class RayPPOTrainer:
 
         for k, v in reward_extra_infos_dict.items():
             if len(v) == n:
+                base_data[k] = v
+        for k, v in (extra_infos_dict or {}).items():
+            if v is not None and len(v) == n:
                 base_data[k] = v
 
         with open(filename, "w") as f:
@@ -924,6 +927,11 @@ class RayPPOTrainer:
                 x if isinstance(x, str) else str(x)
                 for x in router_actions_batch
             ] if router_actions_batch is not None and len(router_actions_batch) == len(output_texts) else output_texts
+            model_actions_batch = test_output_gen_batch.non_tensor_batch.get("model_actions")
+            model_action_texts = [
+                x if isinstance(x, str) else str(x)
+                for x in model_actions_batch
+            ] if model_actions_batch is not None and len(model_actions_batch) == len(output_texts) else [""] * len(output_texts)
             
             # Try to extract observations from input_ids if available
             # For environment interactions, we want to show: Observation -> Action
@@ -939,12 +947,13 @@ class RayPPOTrainer:
                 observation_texts = [""] * len(output_texts)
             
             # Group outputs and observations by trajectory to form complete dialogue history
-            traj_to_turns = {}  # {traj_uid: [(obs, action), ...]}
-            for i, (uid, action) in enumerate(zip(traj_uids, router_output_texts)):
+            traj_to_turns = {}  # {traj_uid: [(obs, router_action, model_output), ...]}
+            for i, (uid, router_action) in enumerate(zip(traj_uids, router_output_texts)):
                 if uid not in traj_to_turns:
                     traj_to_turns[uid] = []
                 obs = observation_texts[i] if i < len(observation_texts) else ""
-                traj_to_turns[uid].append((obs, action))
+                model_output = model_action_texts[i] if i < len(model_action_texts) else ""
+                traj_to_turns[uid].append((obs, router_action, model_output))
             
             # Build full dialogue history for each unique trajectory
             # Format: "Initial: <prompt>\n\nTurn 1:\n  Observation: <obs1>\n  Action: <action1>\nTurn 2: ..."
@@ -966,13 +975,16 @@ class RayPPOTrainer:
                 # Build full dialogue with observations and actions
                 if uid in traj_to_turns:
                     dialogue_parts = [f"Initial Prompt: {initial_prompt}\n"]
-                    for turn_idx, (obs, action) in enumerate(traj_to_turns[uid]):
+                    for turn_idx, (obs, router_action, model_output) in enumerate(traj_to_turns[uid]):
                         if obs.strip():  # If observation exists, show Observation -> Action
                             dialogue_parts.append(f"Turn {turn_idx + 1}:")
                             dialogue_parts.append(f"  Observation: {obs[:500]}...")  # Truncate long observations
-                            dialogue_parts.append(f"  Action: {action}")
+                            dialogue_parts.append(f"  Router Action: {router_action}")
+                            dialogue_parts.append(f"  Model Output: {model_output}")
                         else:  # Fallback: just show action
-                            dialogue_parts.append(f"Turn {turn_idx + 1}: {action}")
+                            dialogue_parts.append(f"Turn {turn_idx + 1}:")
+                            dialogue_parts.append(f"  Router Action: {router_action}")
+                            dialogue_parts.append(f"  Model Output: {model_output}")
                     full_dialogue = "\n".join(dialogue_parts)
                 else:
                     full_dialogue = f"Initial Prompt: {initial_prompt}\n(No responses)"
@@ -2007,13 +2019,18 @@ class RayPPOTrainer:
                     return match.group(1).strip()
 
                 dialogue_parts = [f"Initial Prompt: {initial_prompt}"]
+                model_outputs = traj_data.get('model_actions', [])
                 for turn_idx, (obs, action) in enumerate(zip(traj_data['observations'], traj_data['outputs'])):
+                    model_output = model_outputs[turn_idx] if turn_idx < len(model_outputs) else ""
                     if obs.strip():
                         dialogue_parts.append(f"\nTurn {turn_idx + 1}:")  # 1-based (Turn 1, 2, ...) so summarizer ERROR_TURN and query_texts[idx] align
                         dialogue_parts.append(f"  Observation: {obs}")
-                        dialogue_parts.append(f"  Action: {action}")
+                        dialogue_parts.append(f"  Router Action: {action}")
+                        dialogue_parts.append(f"  Model Output: {model_output}")
                     else:
-                        dialogue_parts.append(f"\nTurn {turn_idx + 1}: {action}")
+                        dialogue_parts.append(f"\nTurn {turn_idx + 1}:")
+                        dialogue_parts.append(f"  Router Action: {action}")
+                        dialogue_parts.append(f"  Model Output: {model_output}")
                 full_dialogue = "\n".join(dialogue_parts)
                 score_values = []
                 for s in traj_data.get('scores', []):
@@ -3040,6 +3057,12 @@ class RayPPOTrainer:
                                 scores=scores,
                                 reward_extra_infos_dict=reward_extra_infos_dict,
                                 dump_path=rollout_data_dir,
+                                extra_infos_dict={
+                                    "router_action": batch.non_tensor_batch.get("router_actions"),
+                                    "raw_output": batch.non_tensor_batch.get("model_actions"),
+                                    "called_model": batch.non_tensor_batch.get("called_models"),
+                                    "model_call_success": batch.non_tensor_batch.get("model_call_success"),
+                                },
                             )
 
                     # validate

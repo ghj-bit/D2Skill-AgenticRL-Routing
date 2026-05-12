@@ -273,13 +273,13 @@ class TrajectoryCollector:
 
         return new_batch
 
-    def append_routed_model_outputs(
+    def keep_router_outputs_only(
         self,
         batch: DataProto,
         router_outputs: List[str],
         routed_outputs: List[str],
     ) -> DataProto:
-        """Append routed model raw outputs after router responses and mask them out of policy loss."""
+        """Keep only router outputs in model responses; routed outputs live in non_tensor_batch."""
         responses = batch.batch["responses"]
         attention_mask = batch.batch["attention_mask"]
         input_ids = batch.batch["input_ids"]
@@ -291,44 +291,27 @@ class TrajectoryCollector:
         if pad_id is None:
             pad_id = self.tokenizer.eos_token_id
 
-        for i, output in enumerate(routed_outputs):
+        for i in range(responses.shape[0]):
             router_ids = self.tokenizer(
                 str(router_outputs[i]) if i < len(router_outputs) else "",
                 add_special_tokens=False,
                 return_attention_mask=False,
             )["input_ids"]
             router_len = min(len(router_ids), response_length)
+
+            attention_mask[i, prompt_length:prompt_length + response_length] = 0
+            if pad_id is not None:
+                responses[i, :] = pad_id
+                input_ids[i, prompt_length:prompt_length + response_length] = pad_id
+
             if router_len <= 0:
                 continue
+
+            router_tensor = torch.tensor(router_ids[:router_len], dtype=responses.dtype, device=responses.device)
+            responses[i, :router_len] = router_tensor
+            input_ids[i, prompt_length:prompt_length + router_len] = router_tensor
+            attention_mask[i, prompt_length:prompt_length + router_len] = 1
             loss_mask[i, prompt_length:prompt_length + router_len] = 1
-            attention_mask[i, prompt_length + router_len:prompt_length + response_length] = 0
-            if pad_id is not None:
-                responses[i, router_len:] = pad_id
-                input_ids[i, prompt_length + router_len:prompt_length + response_length] = pad_id
-
-            capacity = response_length - router_len
-            if capacity <= 0 or not output:
-                continue
-
-            output_ids = self.tokenizer(
-                str(output),
-                add_special_tokens=False,
-                return_attention_mask=False,
-            )["input_ids"]
-            if not output_ids:
-                continue
-
-            output_ids = output_ids[:capacity]
-            output_tensor = torch.tensor(output_ids, dtype=responses.dtype, device=responses.device)
-            start = router_len
-            end = router_len + output_tensor.numel()
-            responses[i, start:end] = output_tensor
-            attention_mask[i, prompt_length + start:prompt_length + end] = 1
-            input_ids[i, prompt_length + start:prompt_length + end] = output_tensor
-
-            if end < response_length and pad_id is not None:
-                responses[i, end:] = pad_id
-                input_ids[i, prompt_length + end:prompt_length + response_length] = pad_id
 
         batch.batch["responses"] = responses
         batch.batch["input_ids"] = input_ids
@@ -565,15 +548,21 @@ class TrajectoryCollector:
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
             model_call_success = np.array(model_call_success, dtype=bool)
+            forced_route_model = self._get_forced_route_model()
+            route_actions_for_record = (
+                [f"<search>{forced_route_model}</search>"] * len(route_actions_str)
+                if forced_route_model
+                else route_actions_str
+            )
             batch.non_tensor_batch['router_actions'] = np.array(
-                [self._router_action_for_record(action) for action in route_actions_str],
+                [self._router_action_for_record(action) for action in route_actions_for_record],
                 dtype=object,
             )
             batch.non_tensor_batch['route_format_valid'] = route_format_valid
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
             batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
             batch.non_tensor_batch['model_call_success'] = model_call_success
-            batch = self.append_routed_model_outputs(batch, route_actions_str, text_model_actions)
+            batch = self.keep_router_outputs_only(batch, route_actions_for_record, text_model_actions)
             # print(f"路由模型执行动作：{text_model_actions}")
             next_obs, next_route_obs, rewards, dones, infos = envs.step(text_model_actions, models)
 
@@ -798,9 +787,14 @@ class TrajectoryCollector:
         model_call_success = []
         # 预处理router输出结果，获得content = model:query 
         #但现在只有model
-        cur_actions, contents, route_format_valids = self.postprocess_predictions(predictions)
         contexts = original_obs.get('text', None)
         forced_route_model = self._get_forced_route_model()
+        if forced_route_model:
+            cur_actions = ['search'] * len(predictions)
+            contents = [forced_route_model] * len(predictions)
+            route_format_valids = [True] * len(predictions)
+        else:
+            cur_actions, contents, route_format_valids = self.postprocess_predictions(predictions)
         # print(f"contents: {contents}")
         cur_completion_tokens = []
         # 构造agent的content
@@ -877,6 +871,9 @@ class TrajectoryCollector:
         model_name = str(routing_cfg.get("force_model_name", "")).strip()
         if not model_name:
             raise ValueError("routing.force_model_enable=True requires routing.force_model_name to be set")
+        llm_name, _ = check_llm_name(model_name)
+        if not llm_name:
+            raise ValueError(f"Unknown routing.force_model_name: {model_name}")
         return model_name
 
     @staticmethod
