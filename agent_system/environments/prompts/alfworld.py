@@ -27,10 +27,20 @@
 
 
 ALFWORLD_OUTPUT_INSTRUCTION = """
-Now it’s your turn to take one action for the current step. 
-You should first reason step-by-step about the current situation, then think carefully which admissible action best advances the shopping goal. 
-This reasoning process MUST be enclosed within <think> </think> tags. 
-Once you’ve finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
+You MUST follow this output format exactly:
+<think>
+your reasoning here
+</think>
+<action>
+one admissible action here
+</action>
+
+Rules:
+- Output ONLY the <think> and <action> blocks.
+- Do NOT output any text before <think> or after </action>.
+- The <action> block MUST contain exactly one admissible action copied exactly from the admissible action list.
+- Do NOT invent new actions.
+- Keep the entire response under 512 tokens.
 """
 
 ALFWORLD_TEMPLATE_NO_HIS = """
