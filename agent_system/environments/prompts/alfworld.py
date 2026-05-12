@@ -14,34 +14,34 @@
 # limitations under the License.
 
 # --------------------- ALFWorld --------------------- #
-# ALFWORLD_OUTPUT_INSTRUCTION = """
-# Output requirements:
-# - Output exactly two blocks and no extra text:
-#   <think>...</think>
-#   <action>...</action>
-# - Keep <think> concise but useful, normally 3-5 short sentences. Do not spend the full 512-token budget on reasoning.
-# - You MUST close </think> early enough to output <action>.
-# - You MUST output <action> before the response ends.
-# - The <action> content MUST be exactly one admissible action copied from the list above.
-# """
-
-
 ALFWORLD_OUTPUT_INSTRUCTION = """
-You MUST follow this output format exactly:
-<think>
-your reasoning here
-</think>
-<action>
-one admissible action here
-</action>
-
-Rules:
-- Output ONLY the <think> and <action> blocks.
-- Do NOT output any text before <think> or after </action>.
-- The <action> block MUST contain exactly one admissible action copied exactly from the admissible action list.
-- Do NOT invent new actions.
-- Keep the entire response under 512 tokens.
+Output requirements:
+- Output exactly two blocks and no extra text:
+  <think>...</think>
+  <action>...</action>
+- Keep <think> concise but useful, normally 3-5 short sentences. Do not spend the full 512-token budget on reasoning.
+- You MUST close </think> early enough to output <action>.
+- You MUST output <action> before the response ends.
+- The <action> content MUST be exactly one admissible action copied from the list above.
 """
+
+
+# ALFWORLD_OUTPUT_INSTRUCTION = """
+# You MUST follow this output format exactly:
+# <think>
+# your reasoning here
+# </think>
+# <action>
+# one admissible action here
+# </action>
+
+# Rules:
+# - Output ONLY the <think> and <action> blocks.
+# - Do NOT output any text before <think> or after </action>.
+# - The <action> block MUST contain exactly one admissible action copied exactly from the admissible action list.
+# - Do NOT invent new actions.
+# - Keep the entire response under 512 tokens.
+# """
 
 ALFWORLD_TEMPLATE_NO_HIS = """
 You are an expert agent operating in the ALFRED Embodied Environment.
