@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import ast
-import csv
 import json
 import math
+import os
 import statistics
 from pathlib import Path
+from typing import Optional
 
 
 def _extract_metric_dict(text: str) -> dict:
@@ -93,34 +94,88 @@ def aggregate(log_root: Path) -> dict:
     return result
 
 
+def _get_stats(result: dict, model_name: str, metric_name: str) -> Optional[dict]:
+    return result.get(model_name, {}).get("metrics", {}).get(metric_name)
+
+
+def _find_success_rate_metric(model_result: dict) -> Optional[str]:
+    metrics = model_result.get("metrics", {})
+    if "val/success_rate" in metrics:
+        return "val/success_rate"
+
+    for metric in sorted(metrics):
+        if metric.endswith("/success_rate"):
+            return metric
+
+    for metric in sorted(metrics):
+        if "success_rate" in metric:
+            return metric
+
+    return None
+
+
+def build_wandb_summary(result: dict) -> dict:
+    summary = {}
+    for model_name in ("deepseek", "qwen3-8B"):
+        model_result = result.get(model_name)
+        if not model_result:
+            continue
+
+        metric_name = _find_success_rate_metric(model_result)
+        if metric_name is None:
+            continue
+
+        stats = _get_stats(result, model_name, metric_name)
+        if stats is None:
+            continue
+
+        summary[f"{model_name}/val_success_rate_mean"] = stats["mean"]
+        summary[f"{model_name}/val_success_rate_std"] = stats["std"]
+    return summary
+
+
+def log_wandb_summary(summary: dict, project: str, name: str) -> None:
+    if not summary:
+        print("No success_rate summary found; skipped wandb logging")
+        return
+
+    try:
+        import wandb
+    except ImportError:
+        print("wandb is not installed; skipped wandb logging")
+        return
+
+    os.environ.setdefault("WANDB_MODE", "offline")
+    run = wandb.init(project=project, name=name)
+    wandb.log(summary)
+    run.finish()
+    print(f"Wrote wandb summary run: project={project} name={name}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("log_root", type=Path)
     parser.add_argument("--json-out", type=Path, default=None)
-    parser.add_argument("--csv-out", type=Path, default=None)
+    parser.add_argument("--wandb-project", default="verl_agent_alfworld_fixed_route")
+    parser.add_argument("--wandb-name", default="fixed_route_5x_summary")
+    parser.add_argument("--no-wandb", action="store_true")
     args = parser.parse_args()
 
     result = aggregate(args.log_root)
     json_out = args.json_out or args.log_root / "fixed_route_metric_summary.json"
-    csv_out = args.csv_out or args.log_root / "fixed_route_metric_summary.csv"
+    json_out.parent.mkdir(parents=True, exist_ok=True)
 
     json_out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
-    with csv_out.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["model", "metric", "mean", "std", "count", "values"])
-        for model_name, model_result in sorted(result.items()):
-            for metric, stats in sorted(model_result["metrics"].items()):
-                writer.writerow([
-                    model_name,
-                    metric,
-                    stats["mean"],
-                    stats["std"],
-                    stats["count"],
-                    json.dumps(stats["values"]),
-                ])
 
     print(f"Wrote {json_out}")
-    print(f"Wrote {csv_out}")
+
+    wandb_summary = build_wandb_summary(result)
+    if wandb_summary:
+        print("Fixed-route success_rate summary:")
+        for key, value in sorted(wandb_summary.items()):
+            print(f"  {key}: {value}")
+    if not args.no_wandb:
+        log_wandb_summary(wandb_summary, args.wandb_project, args.wandb_name)
 
 
 if __name__ == "__main__":
