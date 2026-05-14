@@ -10,7 +10,6 @@ fi
 
 RUNS="${RUNS:-5}"
 BASE_SEED="${BASE_SEED:-0}"
-EVAL_DATASET="${EVAL_DATASET:-eval_in_distribution}"
 LOG_ROOT="${LOG_ROOT:-${SCRIPT_DIR}/fixed_route_5x_logs}"
 
 mkdir -p "$LOG_ROOT"
@@ -74,7 +73,6 @@ run_one_model() {
         echo "[FixedRoute5x] model=${model_label} seed=${seed} log=${log_path}"
         bash "$script_path" "$ENGINE" \
             env.seed="$seed" \
-            env.alfworld.eval_dataset="$EVAL_DATASET" \
             trainer.experiment_name="$experiment_name" \
             "$@" \
             2>&1 | tee "$log_path"
