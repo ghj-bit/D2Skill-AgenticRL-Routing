@@ -228,7 +228,7 @@ reward_model:
   reward_manager: episode
   # Router-R1-style cost-aware reward:
   # base_reward is the D2Skill-style environment episode reward.
-  # normalized_low_cost_reward is in [0, 5], where lower routing cost is better.
+  # normalized_low_cost_reward is in [0, 2], where lower routing cost is better.
   # episode_reward = success_reward_weight * base_reward + cost_reward_weight * normalized_low_cost_reward
   # By default only successful trajectories receive the cost term, so cheap failed trajectories are not encouraged.
   success_reward_weight: 1.0

@@ -235,8 +235,7 @@ def apply_invalid_action_penalty(
     use_think_penalty: bool = False,
 ):
     reward_tensor = data.batch['token_level_scores']
-    if 'step_rewards' in data.batch.keys():
-        step_rewards = data.batch['step_rewards']
+    step_rewards = torch.zeros(len(data), dtype=torch.float32, device=reward_tensor.device)
     for i in range(len(data)):
         data_item = data[i]  # DataProtoItem
 
@@ -258,11 +257,12 @@ def apply_invalid_action_penalty(
             response_text = tokenizer.decode(response_ids_trim, skip_special_tokens=False)
             if not _has_think_block(response_text):
                 action_invalids = torch.ones_like(action_invalids)
+        step_cost_reward = float(data_item.non_tensor_batch.get('step_cost_rewards', 0.0))
+        step_rewards[i] = -1.0 if action_invalids.item() > 0 else step_cost_reward
         # invalid action penalty, same additive design as verl-agent
         reward_tensor[i, valid_response_length - 1] -= invalid_action_penalty_coef * action_invalids
-
-        if 'step_rewards' in data.batch.keys():
-            step_rewards[i] -= invalid_action_penalty_coef * action_invalids
+    data.batch['step_rewards'] = step_rewards
+    data.non_tensor_batch['step_rewards'] = step_rewards.detach().cpu().numpy()
 
     valid_action_ratio = np.mean(data.non_tensor_batch['is_action_valid'].astype(np.float32)).item()
     metrics = {'episode/valid_action_ratio': valid_action_ratio}
@@ -2906,6 +2906,7 @@ class RayPPOTrainer:
                         if self.config.reward_model.launch_reward_fn_async:
                             future_reward = compute_reward_async.remote(batch, self.config, self.tokenizer)
                         else:
+                            # 计算episode分数
                             reward_tensor, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
 
                     # recompute old_log_probs
@@ -2991,12 +2992,16 @@ class RayPPOTrainer:
                             batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
 
                         if self.config.algorithm.adv_estimator == AdvantageEstimator.GiGPO:
-                            if "step_rewards" not in reward_extra_infos_dict:
-                                raise KeyError("GiGPO requires reward_extra_info['step_rewards']")
+                            if "step_rewards" in batch.batch:
+                                raw_step_rewards = batch.batch["step_rewards"].detach().cpu().numpy()
+                            elif "step_rewards" in reward_extra_infos_dict:
+                                raw_step_rewards = np.asarray(reward_extra_infos_dict["step_rewards"], dtype=np.float32)
+                            else:
+                                raise KeyError("GiGPO requires step_rewards in batch or reward_extra_info")
                             batch.batch["step_rewards"] = core_gigpo.compute_step_discounted_returns(
                                 batch=batch,
                                 gamma=self.config.algorithm.gamma,
-                                rewards=np.asarray(reward_extra_infos_dict["step_rewards"], dtype=np.float32),
+                                rewards=raw_step_rewards,
                             ).to(
                                 dtype=torch.float32,
                                 device=batch.batch["responses"].device,

@@ -69,7 +69,7 @@ class EpisodeRewardManager:
         return cost
 
     def _normalize_cost_reward(self, cost: float, buffer: deque) -> float:
-        """Return a Router-R1-style reward in [0, 5] where lower routing cost is better."""
+        """Return a Router-R1-style reward in [0, 2] where lower routing cost is better."""
         processed = self._preprocess_cost(cost)
         buffer.append(processed)
         arr = np.asarray(buffer, dtype=np.float64)
@@ -82,10 +82,10 @@ class EpisodeRewardManager:
 
         denom = cost_max - cost_min
         if denom < self._cost_eps:
-            return 2.5
+            return 1.0
 
         scaled = (processed - cost_min) / denom
-        return 5.0 * (1.0 - float(np.clip(scaled, 0.0, 1.0)))
+        return 2.0 * (1.0 - float(np.clip(scaled, 0.0, 1.0)))
 
     def _episode_base_reward(self, data_item) -> float:
         """Return the D2Skill-style environment episode reward."""
