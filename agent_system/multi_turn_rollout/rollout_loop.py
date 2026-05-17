@@ -26,6 +26,7 @@ from agent_system.environments import EnvironmentManagerBase
 from typing import List, Dict, Any, Optional
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 from routing.llm_agent.route_service import access_routing_pool, check_llm_name
+from routing.models_config.models_config import MODEL_CONF
 import re
 from typing import List, Dict, Any, Tuple
 import logging
@@ -552,10 +553,10 @@ class TrajectoryCollector:
             route_actions_for_record = (
                 [f"<search>{forced_route_model}</search>"] * len(route_actions_str)
                 if forced_route_model
-                else route_actions_str
+                else [self._router_action_for_record(action) for action in route_actions_str]
             )
             batch.non_tensor_batch['router_actions'] = np.array(
-                [self._router_action_for_record(action) for action in route_actions_for_record],
+                route_actions_for_record,
                 dtype=object,
             )
             batch.non_tensor_batch['route_format_valid'] = route_format_valid
@@ -886,28 +887,28 @@ class TrajectoryCollector:
 
     @staticmethod
     def _router_action_for_record(action: str) -> str:
-        text = (action or "").strip()
-        match = re.search(r"<search>(.*?)</search>", text, re.DOTALL)
-        if not match:
-            return text
-        model_name = match.group(1).strip()
-        return f"<search>{model_name}</search>"
+        return TrajectoryCollector._postprocess_route_action(action or "").strip()
 
     @staticmethod
     def _project_route_action(prediction: str) -> Tuple[str, str, bool]:
         original = (prediction or "").strip()
         trimmed = TrajectoryCollector._postprocess_route_action(original)
-        match = re.search(r"<search>(.*?)</search>", trimmed, re.DOTALL)
+        pattern = r"\A<think>\s*(.*?)\s*</think>\s*<search>\s*(.*?)\s*</search>\Z"
+        match = re.fullmatch(pattern, trimmed, re.DOTALL)
         if not match:
             return None, "", False
-        model_name = match.group(1).strip()
+        reasoning = match.group(1).strip()
+        model_name = match.group(2).strip()
         llm_name, _ = check_llm_name(model_name)
-        projected = f"<search>{model_name}</search>"
         valid = (
-            original == projected
+            original == trimmed
+            and bool(reasoning)
+            and llm_name in MODEL_CONF
+            and len(re.findall(r"<think>", original)) == 1
+            and len(re.findall(r"</think>", original)) == 1
             and len(re.findall(r"<search>", original)) == 1
+            and len(re.findall(r"</search>", original)) == 1
             and not re.search(r"</?answer>", original)
-            and bool(llm_name)
         )
         return ("search" if valid else None), (llm_name if valid else ""), valid
 

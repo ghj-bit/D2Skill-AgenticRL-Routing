@@ -79,8 +79,8 @@ def build_refined_trajectory(
             "turns": [
                 {
                     "observation": str,
-                    "router_action": str,
-                    "raw_output": str,
+                    "route_raw_output": str,
+                    "model_raw_output": str,
                     "model_action": str
                 },
                 ...
@@ -96,13 +96,13 @@ def build_refined_trajectory(
             obs = ""
         elif not isinstance(obs, str):
             obs = str(obs)
-        router_action = (actions[i] or "").strip() if i < len(actions) else ""
+        route_raw_output = (actions[i] or "").strip() if i < len(actions) else ""
         raw_output = (model_actions[i] or "").strip() if i < len(model_actions) else ""
         model_action = extract_action_from_output(raw_output)
         turns.append({
             "observation": obs.strip(),
-            "router_action": router_action,
-            "raw_output": raw_output,
+            "route_raw_output": route_raw_output,
+            "model_raw_output": raw_output,
             "model_action": model_action,
         })
     return {

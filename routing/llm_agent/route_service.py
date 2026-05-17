@@ -66,14 +66,15 @@ def get_llm_response_via_api(prompt,
         raise Exception("Reach MAX_TRIALS={}".format(MAX_TRIALS))
     contents = completion.choices
     meta_info = completion.usage
-    completion_tokens = meta_info.completion_tokens
-    # prompt_tokens = meta_info.prompt_tokens
-    # total_tokens = meta_info.total_tokens
-    # print(completion_tokens, prompt_tokens, total_tokens)
+    completion_tokens = getattr(meta_info, "completion_tokens", 0) or 0
+    prompt_tokens = getattr(meta_info, "prompt_tokens", 0) or 0
+    total_tokens = getattr(meta_info, "total_tokens", None)
+    if total_tokens is None:
+        total_tokens = prompt_tokens + completion_tokens
     if len(contents) == 1:
-        return contents[0].message.content, completion_tokens
+        return contents[0].message.content, total_tokens
     else:
-        return [c.message.content for c in contents], completion_tokens
+        return [c.message.content for c in contents], total_tokens
 
 
 # API_PRICE_1M_TOKENS = {
@@ -152,19 +153,19 @@ def request_task(data):
     # print(LLM_NAME)
     try:
         print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}')
-        single_response, completion_tokens = get_llm_response_via_api(prompt=query_text,
-                                                                      base_url=api_base,
-                                                                      api_key=api_key,
-                                                                      TAU=TAU,
-                                                                      LLM_MODEL=LLM_NAME)
-        print(single_response, completion_tokens)
+        single_response, total_tokens = get_llm_response_via_api(prompt=query_text,
+                                                                 base_url=api_base,
+                                                                 api_key=api_key,
+                                                                 TAU=TAU,
+                                                                 LLM_MODEL=LLM_NAME)
+        print(single_response, total_tokens)
         # print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}, response: {single_response}')
     except Exception as e:
         print(e)
         single_response = "API Request Error"
-        completion_tokens = 0.0
+        total_tokens = 0.0
 
-    return q_id, single_response, int(completion_tokens) * API_PRICE_1M_TOKENS[LLM_NAME], LLM_NAME
+    return q_id, single_response, int(total_tokens) * API_PRICE_1M_TOKENS[LLM_NAME], LLM_NAME
 
 
 def check_llm_name(target_llm):
@@ -242,15 +243,16 @@ def access_routing_pool(queries, api_base, api_key):
 
     ret.sort(key=lambda x: x[0], reverse=False)
     resp = []
-    completion_tokens_list = []
+    total_token_costs = []
     called_model_names = []
-    for _, response, completion_tokens, called_model_name in ret:
+    for _, response, token_cost, called_model_name in ret:
         resp.append(response)
-        completion_tokens_list.append(completion_tokens)
+        total_token_costs.append(token_cost)
         called_model_names.append(called_model_name)
 
     return {
         "result": resp,
-        "completion_tokens_list": completion_tokens_list,
+        # Keep the existing key for caller compatibility; values now use total tokens.
+        "completion_tokens_list": total_token_costs,
         "called_model_names": called_model_names,
     }

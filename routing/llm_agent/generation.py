@@ -8,7 +8,8 @@ from .tensor_helper import TensorHelper, TensorConfig
 from verl import DataProto
 from verl.utils.tracking import Tracking
 import shutil
-from .route_service import access_routing_pool
+from .route_service import access_routing_pool, check_llm_name
+from routing.models_config.models_config import MODEL_CONF
 
 
 @dataclass
@@ -376,9 +377,20 @@ class LLMGenerationManager:
         cur_actions, contents = self.postprocess_predictions(predictions)
         next_obs, dones, valid_action, is_route, cur_completion_tokens = [], [], [], [], []
         
-        route_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
+        route_queries = {
+            "model_name": [
+                content
+                for action, content in zip(cur_actions, contents)
+                if action == 'search'
+            ],
+            "query": [
+                prediction
+                for action, prediction in zip(cur_actions, predictions)
+                if action == 'search'
+            ],
+        }
         if do_route:
-            route_results, completion_tokens_list = self.batch_route(route_queries)
+            route_results, completion_tokens_list, _ = self.batch_route(route_queries)
             assert len(route_results) == sum([1 for action in cur_actions if action == 'search'])
             assert len(route_results) == len(completion_tokens_list)
         else:
@@ -427,7 +439,7 @@ class LLMGenerationManager:
             
         return next_obs, dones, valid_action, is_route, cur_completion_tokens
 
-    def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
+    def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[str], List[str]]:
         """
         Process (text-based) predictions from llm into actions and validity flags.
         
@@ -442,17 +454,22 @@ class LLMGenerationManager:
                 
         for prediction in predictions:
             if isinstance(prediction, str): # for llm output
-                pattern = r'<(search|answer)>(.*?)</\1>'
-                match = re.search(pattern, prediction, re.DOTALL)
+                text = prediction.strip()
+                if "</search>" in text:
+                    text = text.split("</search>", 1)[0] + "</search>"
+                pattern = r"\A<think>\s*(.*?)\s*</think>\s*<search>\s*(.*?)\s*</search>\Z"
+                match = re.fullmatch(pattern, text, re.DOTALL)
                 if match:
-                    content = match.group(2).strip()  # Return only the content inside the tags
-                    action = match.group(1)
-                    if action == "search" and ("llm-name" in content.strip().lower() or "your-query" in content.strip().lower()):
-                        action = "route invalid-1"
-                    elif action == "search" and ":" not in content:
-                        action = "route invalid-2"
-                    elif action == "search" and content.strip().lower().split(":")[-1].strip() == "":
-                        action = "route invalid-3"
+                    reasoning = match.group(1).strip()
+                    content = match.group(2).strip()
+                    llm_name, _ = check_llm_name(content)
+                    action = (
+                        "search"
+                        if reasoning and llm_name in MODEL_CONF
+                        else None
+                    )
+                    if action == "search":
+                        content = llm_name
                 else:
                     content = ''
                     action = None
@@ -464,7 +481,7 @@ class LLMGenerationManager:
             
         return actions, contents
 
-    def batch_route(self, queries: List[str] = None) -> str:
+    def batch_route(self, queries: Dict = None) -> str:
         ret = access_routing_pool(queries=queries, api_base=self.config.api_base, api_key=self.config.api_key)
         
-        return ret['result'], ret["completion_tokens_list"]
+        return ret['result'], ret["completion_tokens_list"], ret.get("called_model_names", [])

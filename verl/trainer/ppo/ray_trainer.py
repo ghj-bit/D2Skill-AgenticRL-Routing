@@ -2104,9 +2104,9 @@ class RayPPOTrainer:
                         'turns': [
                             {
                                 'observation': obs_list[i] if i < len(obs_list) else "",
-                                'router_action': router_actions[i] if i < len(router_actions) else "",
+                                'route_raw_output': router_actions[i] if i < len(router_actions) else "",
                                 'model_call_success': model_call_success[i] if i < len(model_call_success) else False,
-                                'raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
+                                'model_raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
                                 'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
                             }
                             for i in range(turn_count)
@@ -3063,8 +3063,8 @@ class RayPPOTrainer:
                                 reward_extra_infos_dict=reward_extra_infos_dict,
                                 dump_path=rollout_data_dir,
                                 extra_infos_dict={
-                                    "router_action": batch.non_tensor_batch.get("router_actions"),
-                                    "raw_output": batch.non_tensor_batch.get("model_actions"),
+                                    "route_raw_output": batch.non_tensor_batch.get("router_actions"),
+                                    "model_raw_output": batch.non_tensor_batch.get("model_actions"),
                                     "called_model": batch.non_tensor_batch.get("called_models"),
                                     "model_call_success": batch.non_tensor_batch.get("model_call_success"),
                                 },
