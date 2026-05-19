@@ -4,9 +4,24 @@ import ast
 import json
 import math
 import os
+import re
 import statistics
 from pathlib import Path
 from typing import Optional
+
+
+def _extract_numeric_pairs(text: str) -> dict:
+    """Extract numeric metric entries from a printed dict, ignoring text fields."""
+    metrics = {}
+    pattern = re.compile(
+        r"""(?P<quote>['"])(?P<key>(?:\\.|(?!\1).)*?)(?P=quote)\s*:\s*"""
+        r"""(?P<value>[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"""
+    )
+    for match in pattern.finditer(text):
+        value = float(match.group("value"))
+        if math.isfinite(value):
+            metrics[match.group("key")] = value
+    return metrics
 
 
 def _extract_metric_dict(text: str) -> dict:
@@ -25,6 +40,7 @@ def _extract_metric_dict(text: str) -> dict:
     if start < 0:
         raise ValueError("No metrics dict found after validation metrics marker")
 
+    parse_error = None
     depth = 0
     in_string = False
     string_quote = ""
@@ -48,8 +64,18 @@ def _extract_metric_dict(text: str) -> dict:
             depth -= 1
             if depth == 0:
                 raw = text[start:idx + 1]
-                return ast.literal_eval(raw)
+                try:
+                    return ast.literal_eval(raw)
+                except (SyntaxError, ValueError) as exc:
+                    parse_error = exc
+                    break
 
+    fallback = _extract_numeric_pairs(text[start:])
+    if fallback:
+        return fallback
+
+    if parse_error is not None:
+        raise ValueError(f"Failed to parse metrics dict: {parse_error}") from parse_error
     raise ValueError("Unclosed metrics dict")
 
 
@@ -67,9 +93,15 @@ def _numeric_items(metrics: dict) -> dict:
 
 def aggregate(log_root: Path) -> dict:
     grouped = {}
+    skipped = []
     for log_path in sorted(log_root.glob("*/seed_*.log")):
         model_name = log_path.parent.name
-        metrics = _numeric_items(_extract_metric_dict(log_path.read_text(encoding="utf-8", errors="ignore")))
+        try:
+            metrics = _numeric_items(_extract_metric_dict(log_path.read_text(encoding="utf-8", errors="ignore")))
+        except Exception as exc:
+            skipped.append({"path": str(log_path), "error": str(exc)})
+            print(f"Warning: skipped {log_path}: {exc}")
+            continue
         grouped.setdefault(model_name, []).append({"path": str(log_path), "metrics": metrics})
 
     result = {}
@@ -91,6 +123,8 @@ def aggregate(log_root: Path) -> dict:
             "runs": [run["path"] for run in runs],
             "metrics": summary,
         }
+    if skipped:
+        result["_skipped"] = skipped
     return result
 
 
