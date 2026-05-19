@@ -91,7 +91,8 @@ def get_llm_response_via_api(prompt,
 
 API_PRICE_1M_TOKENS = {
     "qwen3-8B": 0.1,
-    "deepseek": 0.88,
+    "deepseek": 2.0,
+    "gemma-2-27B": 0.8,
 }
 
 
@@ -207,6 +208,8 @@ def check_llm_name(target_llm):
         LLM_NAME = "qwen3-8B"
     elif "deepseek" in target_llm:
         LLM_NAME = "deepseek"
+    elif "gemma-2-27b" in target_llm or target_llm in {"gemma", "gemma-27b", "gemma27b"}:
+        LLM_NAME = "gemma-2-27B"
     else:
         LLM_NAME = ""
     return LLM_NAME, TAU

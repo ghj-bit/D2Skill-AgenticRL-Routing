@@ -274,7 +274,9 @@ def _find_success_rate_metric(model_result: dict) -> Optional[str]:
 
 def build_wandb_summary(result: dict) -> dict:
     summary = {}
-    for model_name in ("deepseek", "qwen3-8B"):
+    for model_name, model_result in sorted(result.items()):
+        if model_name.startswith("_") or not isinstance(model_result, dict):
+            continue
         model_result = result.get(model_name)
         if not model_result:
             continue
