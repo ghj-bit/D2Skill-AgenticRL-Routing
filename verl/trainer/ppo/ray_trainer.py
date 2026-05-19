@@ -1117,6 +1117,7 @@ class RayPPOTrainer:
                     prefix="val",
                 )
             )
+        self._write_validation_alfworld_task_success(metric_dict)
 
         # Dynamic Skill Bank Update (validation side): write to both val/train retrieval_memory.
         # If update_source is train/all, the train loop also runs _update_skills_from_training_data;
@@ -1138,6 +1139,66 @@ class RayPPOTrainer:
         self._run_skill_eviction_after_validation()
 
         return metric_dict
+
+    def _write_validation_alfworld_task_success(self, metric_dict: dict) -> None:
+        """Persist per-ALFWorld-task validation success rates in this experiment dir."""
+        tasks = [
+            "pick_and_place",
+            "pick_two_obj_and_place",
+            "look_at_obj_in_light",
+            "pick_heat_then_place_in_recep",
+            "pick_cool_then_place_in_recep",
+            "pick_clean_then_place_in_recep",
+        ]
+        task_metrics = {}
+        for task in tasks:
+            success_metric = f"val/{task}_success_rate"
+            fallback_metric = f"val/{task}/test_score"
+            if success_metric in metric_dict:
+                source_metric = success_metric
+                success_rate = metric_dict[success_metric]
+            elif fallback_metric in metric_dict:
+                source_metric = fallback_metric
+                success_rate = metric_dict[fallback_metric]
+            else:
+                continue
+
+            item = {
+                "success_rate": float(success_rate),
+                "source_metric": source_metric,
+            }
+            test_score_metric = f"val/{task}/test_score"
+            if test_score_metric in metric_dict:
+                item["test_score"] = float(metric_dict[test_score_metric])
+            tool_call_metric = f"val/{task}/tool_call_count/mean"
+            if tool_call_metric in metric_dict:
+                item["tool_call_count_mean"] = float(metric_dict[tool_call_metric])
+            task_metrics[task] = item
+
+        if not task_metrics:
+            return
+
+        save_dir = self.config.trainer.get("default_local_dir", "./outputs")
+        os.makedirs(save_dir, exist_ok=True)
+        payload = {
+            "global_step": int(getattr(self, "global_steps", 0)),
+            "project_name": self.config.trainer.get("project_name", ""),
+            "experiment_name": self.config.trainer.get("experiment_name", ""),
+            "overall_success_rate": float(metric_dict["val/success_rate"]) if "val/success_rate" in metric_dict else None,
+            "alfworld_tasks": task_metrics,
+        }
+        payload = self._json_safe_for_retrieved_skills(payload)
+
+        paths = [
+            os.path.join(save_dir, f"validation_alfworld_task_success_step{self.global_steps}.json"),
+            os.path.join(save_dir, "validation_alfworld_task_success_latest.json"),
+        ]
+        for path in paths:
+            tmp_path = f"{path}.tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, path)
+        print(f"[ValidationMetrics] Wrote ALFWorld task success rates to {paths[-1]}")
 
     def _run_skill_eviction_after_validation(self) -> None:
         """
