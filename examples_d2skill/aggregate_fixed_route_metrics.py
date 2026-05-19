@@ -10,6 +10,16 @@ from pathlib import Path
 from typing import Optional
 
 
+ALFWORLD_TASKS = [
+    "pick_and_place",
+    "pick_two_obj_and_place",
+    "look_at_obj_in_light",
+    "pick_heat_then_place_in_recep",
+    "pick_cool_then_place_in_recep",
+    "pick_clean_then_place_in_recep",
+]
+
+
 def _extract_numeric_pairs(text: str) -> dict:
     """Extract numeric metric entries from a printed dict, ignoring text fields."""
     metrics = {}
@@ -91,6 +101,117 @@ def _numeric_items(metrics: dict) -> dict:
     return out
 
 
+def _summarize_values(values: list[float]) -> dict:
+    stats = {
+        "mean": statistics.fmean(values),
+        "std": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "count": len(values),
+        "min": min(values),
+        "max": max(values),
+        "values": values,
+    }
+    stats["median"] = statistics.median(values)
+    stats["stderr"] = stats["std"] / math.sqrt(len(values)) if len(values) > 1 else 0.0
+    return stats
+
+
+def _metric_summary(runs: list[dict], metric_name: str) -> Optional[dict]:
+    values = [run["metrics"][metric_name] for run in runs if metric_name in run["metrics"]]
+    if not values:
+        return None
+    return _summarize_values(values)
+
+
+def _build_alfworld_task_summary(runs: list[dict]) -> dict:
+    task_summary = {}
+    for task in ALFWORLD_TASKS:
+        task_metrics = {}
+
+        success_metric = f"val/{task}_success_rate"
+        success_stats = _metric_summary(runs, success_metric)
+        success_source = success_metric
+
+        # Older logs may only contain val/<task>/test_score. In ALFWorld this is
+        # the mean binary episode reward, so it is a usable success-rate fallback.
+        if success_stats is None:
+            fallback_metric = f"val/{task}/test_score"
+            success_stats = _metric_summary(runs, fallback_metric)
+            success_source = fallback_metric
+
+        if success_stats is not None:
+            task_metrics["success_rate"] = {
+                "source_metric": success_source,
+                **success_stats,
+            }
+
+        for output_name, metric_name in (
+            ("test_score", f"val/{task}/test_score"),
+            ("tool_call_count_mean", f"val/{task}/tool_call_count/mean"),
+        ):
+            stats = _metric_summary(runs, metric_name)
+            if stats is not None:
+                task_metrics[output_name] = {
+                    "source_metric": metric_name,
+                    **stats,
+                }
+
+        if task_metrics:
+            task_summary[task] = task_metrics
+
+    return task_summary
+
+
+def _build_run_metrics(log_path: str, metrics: dict) -> dict:
+    run_record = {
+        "path": log_path,
+        "metrics": {},
+        "alfworld_tasks": {},
+    }
+    seed_match = re.search(r"seed_(-?\d+)\.log$", Path(log_path).name)
+    if seed_match:
+        run_record["seed"] = int(seed_match.group(1))
+
+    if "val/success_rate" in metrics:
+        run_record["metrics"]["success_rate"] = {
+            "source_metric": "val/success_rate",
+            "value": metrics["val/success_rate"],
+        }
+
+    for task in ALFWORLD_TASKS:
+        task_metrics = {}
+        success_metric = f"val/{task}_success_rate"
+        fallback_metric = f"val/{task}/test_score"
+        if success_metric in metrics:
+            task_metrics["success_rate"] = {
+                "source_metric": success_metric,
+                "value": metrics[success_metric],
+            }
+        elif fallback_metric in metrics:
+            task_metrics["success_rate"] = {
+                "source_metric": fallback_metric,
+                "value": metrics[fallback_metric],
+            }
+
+        for output_name, metric_name in (
+            ("test_score", fallback_metric),
+            ("tool_call_count_mean", f"val/{task}/tool_call_count/mean"),
+        ):
+            if metric_name in metrics:
+                task_metrics[output_name] = {
+                    "source_metric": metric_name,
+                    "value": metrics[metric_name],
+                }
+
+        if task_metrics:
+            run_record["alfworld_tasks"][task] = task_metrics
+
+    if not run_record["metrics"]:
+        run_record.pop("metrics")
+    if not run_record["alfworld_tasks"]:
+        run_record.pop("alfworld_tasks")
+    return run_record
+
+
 def aggregate(log_root: Path) -> dict:
     grouped = {}
     skipped = []
@@ -112,17 +233,20 @@ def aggregate(log_root: Path) -> dict:
             values = [run["metrics"][key] for run in runs if key in run["metrics"]]
             if not values:
                 continue
-            summary[key] = {
-                "mean": statistics.fmean(values),
-                "std": statistics.stdev(values) if len(values) > 1 else 0.0,
-                "count": len(values),
-                "values": values,
-            }
-        result[model_name] = {
+            summary[key] = _summarize_values(values)
+        model_result = {
             "num_runs": len(runs),
             "runs": [run["path"] for run in runs],
+            "run_metrics": [
+                _build_run_metrics(run["path"], run["metrics"])
+                for run in runs
+            ],
             "metrics": summary,
         }
+        alfworld_tasks = _build_alfworld_task_summary(runs)
+        if alfworld_tasks:
+            model_result["alfworld_tasks"] = alfworld_tasks
+        result[model_name] = model_result
     if skipped:
         result["_skipped"] = skipped
     return result
@@ -165,6 +289,13 @@ def build_wandb_summary(result: dict) -> dict:
 
         summary[f"{model_name}/val_success_rate_mean"] = stats["mean"]
         summary[f"{model_name}/val_success_rate_std"] = stats["std"]
+
+        for task, task_metrics in model_result.get("alfworld_tasks", {}).items():
+            task_success = task_metrics.get("success_rate")
+            if not task_success:
+                continue
+            summary[f"{model_name}/{task}/val_success_rate_mean"] = task_success["mean"]
+            summary[f"{model_name}/{task}/val_success_rate_std"] = task_success["std"]
     return summary
 
 

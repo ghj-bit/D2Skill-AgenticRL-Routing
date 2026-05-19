@@ -77,6 +77,7 @@ run_one_model() {
             "$@" \
             2>&1 | tee "$log_path"
         touch "$done_path"
+        python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT" --no-wandb
     done
 }
 
