@@ -142,7 +142,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.val_before_train=True \
     trainer.ray_wait_register_center_timeout=3600 \
     ray_init.num_cpus=80 \
-    +api_base="https://notebook-inspire.sii.edu.cn/ws-9dcc0e1f-80a4-4af2-bc2f-0e352e7b17e6/project-b795c114-135a-40db-b3d0-19b60f25237b/user-543feed4-0be2-4972-8987-a324af06c93f/vscode/4ff709dd-915e-4392-8a69-12c61dc95edb/46309a08-f7f1-4f88-b9f1-aabe05bace7a/proxy/8055/v1" \
+    +api_base="https://ai-notebook-inspire.sii.edu.cn/ws-9dcc0e1f-80a4-4af2-bc2f-0e352e7b17e6/project-b795c114-135a-40db-b3d0-19b60f25237b/user-543feed4-0be2-4972-8987-a324af06c93f/vscode/4ff709dd-915e-4392-8a69-12c61dc95edb/adacd345-5b66-42d3-a3a3-94234c2aa3cd/proxy/8055/v1" \
     +api_key="empty" \
     "$@" \
     2>&1 | tee run_alfworld_skills_management.log
