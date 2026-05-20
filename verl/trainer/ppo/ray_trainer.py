@@ -1142,6 +1142,9 @@ class RayPPOTrainer:
 
     def _write_validation_alfworld_task_success(self, metric_dict: dict) -> None:
         """Persist per-ALFWorld-task validation success rates in this experiment dir."""
+        if not self.config.trainer.get("write_validation_alfworld_task_success", False):
+            return
+
         tasks = [
             "pick_and_place",
             "pick_two_obj_and_place",
@@ -1189,16 +1192,12 @@ class RayPPOTrainer:
         }
         payload = self._json_safe_for_retrieved_skills(payload)
 
-        paths = [
-            os.path.join(save_dir, f"validation_alfworld_task_success_step{self.global_steps}.json"),
-            os.path.join(save_dir, "validation_alfworld_task_success_latest.json"),
-        ]
-        for path in paths:
-            tmp_path = f"{path}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
-            os.replace(tmp_path, path)
-        print(f"[ValidationMetrics] Wrote ALFWorld task success rates to {paths[-1]}")
+        path = os.path.join(save_dir, f"validation_alfworld_task_success_step{self.global_steps}.json")
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, path)
+        print(f"[ValidationMetrics] Wrote ALFWorld task success rates to {path}")
 
     def _run_skill_eviction_after_validation(self) -> None:
         """

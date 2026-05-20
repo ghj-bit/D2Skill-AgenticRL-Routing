@@ -18,6 +18,7 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     env.skills_only_memory.update_save_traj=True \
     trainer.val_only=True \
     trainer.val_before_train=True \
+    +trainer.write_validation_alfworld_task_success=True \
     trainer.project_name='verl_agent_alfworld_fixed_route' \
     trainer.experiment_name="fixed_${FIXED_ROUTE_MODEL}" \
     "$@"
