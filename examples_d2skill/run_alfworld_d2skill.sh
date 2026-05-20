@@ -42,8 +42,8 @@ group_size=8
 success_reward_weight="${SUCCESS_REWARD_WEIGHT:-1.0}"
 cost_reward_weight="${COST_REWARD_WEIGHT:-0.0}"
 
-# ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-4B-Instruct-2507"
-ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen2.5-7B-Instruct"
+ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen2.5-3B-Instruct"
+# ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen2.5-7B-Instruct"
 # We only use data preparation to indicate the modality and the data size.
 python3 -m SkillRL.examples.data_preprocess.prepare \
     --mode 'text' \
