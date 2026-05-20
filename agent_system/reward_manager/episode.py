@@ -158,7 +158,10 @@ class EpisodeRewardManager:
             cost_reward = self._normalize_cost_reward(api_cost, self._episode_cost_buffer)
             step_cost_reward = self._normalize_cost_reward(step_api_cost, self._step_cost_buffer)
             format_reward = 0.0 if format_valid else -1.0
-            step_reward = float(step_cost_reward) if format_valid else -1.0
+            if self.cost_reward_weight == 0:
+                step_reward = 0.0 if format_valid else -1.0
+            else:
+                step_reward = float(step_cost_reward) if format_valid else -1.0
             if self.cost_reward_weight > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
                 score = float(base_score) * self.success_reward_weight + cost_reward * self.cost_reward_weight
             else:
