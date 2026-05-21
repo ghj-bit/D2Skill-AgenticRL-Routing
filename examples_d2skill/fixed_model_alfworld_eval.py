@@ -280,7 +280,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=int(os.environ.get("FIXED_EVAL_SEED", 1)))
     parser.add_argument("--eval-dataset", default=os.environ.get("FIXED_EVAL_DATASET", "eval_in_distribution"))
     parser.add_argument("--history-length", type=int, default=int(os.environ.get("FIXED_EVAL_HISTORY_LENGTH", 4)))
-    parser.add_argument("--max-workers", type=int, default=int(os.environ.get("FIXED_EVAL_MAX_WORKERS", 8)))
+    parser.add_argument("--max-workers", type=int, default=int(os.environ.get("FIXED_EVAL_MAX_WORKERS", 32)))
     parser.add_argument("--output-dir", default=os.environ.get("FIXED_EVAL_OUTPUT_DIR"))
     return parser.parse_args()
 
