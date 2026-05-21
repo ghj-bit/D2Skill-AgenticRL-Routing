@@ -1,10 +1,10 @@
 MODELS_INTRODTION = """
     **Qwen3-8B**:
-    Qwen3-8B is an 8.2-billion-parameter dense causal language model developed by Alibaba as part of the Qwen3 series. \
-    It is designed for natural language understanding, coding, mathematics, reasoning, and multilingual generation tasks. \
-    The model supports both thinking and non-thinking modes, enabling stronger multi-step reasoning while maintaining efficient \
-    general dialogue performance. \
-    It is instruction-tuned for strong instruction following, structured response generation, creative writing, and agent-oriented workflows.
+    Alibaba’s Qwen3-8B is an 8.2-billion-parameter dense causal language model designed for natural language understanding, \
+    coding, mathematics, reasoning, and multilingual text generation tasks. As part of the Qwen3 series, it features enhanced reasoning ability, \
+    strong instruction following, multilingual support across more than 100 languages and dialects, \
+    and seamless switching between thinking and non-thinking modes for balancing reasoning quality and inference efficiency. \
+    Qwen3-8B is optimized for structured response generation, creative writing, dialogue interaction, and complex language understanding tasks.
 
     **Gemma-2-27B**:
     Gemma-2-27B is a 27-billion-parameter instruction-tuned large language model developed by Google, optimized for advanced reasoning, \
