@@ -22,3 +22,4 @@ core.*
 *.py[cod]
 *.egg-info
 /agent_system/environments/env_package/
+/summary_val
