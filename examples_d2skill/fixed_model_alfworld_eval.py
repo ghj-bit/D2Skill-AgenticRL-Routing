@@ -11,12 +11,14 @@ import os
 import sys
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
+from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SKILLRL_ENV_PATH = PROJECT_ROOT / "SkillRL" / "agent_system" / "environments"
@@ -278,6 +280,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=int(os.environ.get("FIXED_EVAL_SEED", 1)))
     parser.add_argument("--eval-dataset", default=os.environ.get("FIXED_EVAL_DATASET", "eval_in_distribution"))
     parser.add_argument("--history-length", type=int, default=int(os.environ.get("FIXED_EVAL_HISTORY_LENGTH", 4)))
+    parser.add_argument("--max-workers", type=int, default=int(os.environ.get("FIXED_EVAL_MAX_WORKERS", 8)))
     parser.add_argument("--output-dir", default=os.environ.get("FIXED_EVAL_OUTPUT_DIR"))
     return parser.parse_args()
 
@@ -318,93 +321,107 @@ def main() -> None:
     total_start_time = time.time()
 
     try:
-        for test_idx in range(args.test_times):
-            logging.info(f"\n========== Start test {test_idx} ==========")
-            start_time = time.time()
+        with tqdm(total=args.test_times * args.max_steps, desc="fixed-model eval", unit="step") as pbar:
+            for test_idx in range(args.test_times):
+                logging.info(f"\n========== Start test {test_idx} ==========")
+                start_time = time.time()
 
-            kwargs = {}
-            obs, infos = env_manager.reset(kwargs)
-            env_dones = [False] * args.env_num
+                kwargs = {}
+                obs, infos = env_manager.reset(kwargs)
+                env_dones = [False] * args.env_num
 
-            overall_success_this_round = np.zeros(args.env_num, dtype=bool)
-            task_success_cnt = defaultdict(int)
-            task_total_cnt = defaultdict(int)
+                overall_success_this_round = np.zeros(args.env_num, dtype=bool)
+                task_success_cnt = defaultdict(int)
+                task_total_cnt = defaultdict(int)
 
-            for step_idx in range(args.max_steps):
-                logging.info(
-                    f"Step {step_idx}; Dones ({np.array(env_dones).sum().item()}/{args.env_num}); "
-                    f"SR {overall_success_this_round.mean().item()}"
-                )
-
-                actions = []
-                for i in range(args.env_num):
-                    if env_dones[i]:
-                        actions.append("None")
-                    else:
-                        actions.append(agent.get_action_from_gpt(obs["text"][i]))
-
-                obs, rewards, dones, infos = env_manager.step(actions)
-
-                for i in range(args.env_num):
-                    if env_dones[i]:
-                        continue
-
-                    if dones[i]:
-                        env_dones[i] = True
-                        won = bool(infos[i].get("won", False))
-                        overall_success_this_round[i] = won
-
-                        gamefile = infos[i].get("extra.gamefile", "")
-                        matched = False
-                        for task in TASKS:
-                            if task in gamefile:
-                                task_total_cnt[task] += 1
-                                if won:
-                                    task_success_cnt[task] += 1
-                                matched = True
-                                break
-                        if not matched:
-                            task_total_cnt["other"] += 1
-                            if won:
-                                task_success_cnt["other"] += 1
-
-                if all(env_dones):
-                    logging.info("All environments finished early!")
-                    break
-
-            round_success_rate = overall_success_this_round.mean()
-            overall_success_rates.append(round_success_rate)
-            logging.info(f"Test {test_idx} overall success: {round_success_rate:.4f}")
-
-            round_tasks = {}
-            for task in TASKS + ["other"]:
-                if task_total_cnt.get(task, 0) > 0:
-                    rate = task_success_cnt[task] / task_total_cnt[task]
-                    task_success_history[task].append(rate)
-                    round_tasks[task] = {
-                        "success_rate": rate,
-                        "success_count": int(task_success_cnt[task]),
-                        "count": int(task_total_cnt[task]),
-                    }
+                for step_idx in range(args.max_steps):
                     logging.info(
-                        f"    {task:<35s}: {rate:.4f} "
-                        f"({task_success_cnt[task]}/{task_total_cnt[task]})"
+                        f"Step {step_idx}; Dones ({np.array(env_dones).sum().item()}/{args.env_num}); "
+                        f"SR {overall_success_this_round.mean().item()}"
                     )
 
-            elapsed = time.time() - start_time
-            logging.info(f"Test {test_idx} time elapsed: {elapsed:.2f}s\n")
+                    actions = ["None"] * args.env_num
+                    pending = [i for i in range(args.env_num) if not env_dones[i]]
+                    prompts = [obs["text"][i] for i in pending]
+                    if args.max_workers <= 1:
+                        generated = [agent.get_action_from_gpt(prompt) for prompt in prompts]
+                    else:
+                        with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+                            generated = list(executor.map(agent.get_action_from_gpt, prompts))
+                    for i, action in zip(pending, generated):
+                        actions[i] = action
 
-            round_summary = {
-                "round": test_idx,
-                "overall_success_rate": float(round_success_rate),
-                "elapsed_seconds": elapsed,
-                "tasks": round_tasks,
-            }
-            rounds.append(round_summary)
-            (output_dir / f"round_{test_idx}_summary.json").write_text(
-                json.dumps(round_summary, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+                    obs, rewards, dones, infos = env_manager.step(actions)
+
+                    for i in range(args.env_num):
+                        if env_dones[i]:
+                            continue
+
+                        if dones[i]:
+                            env_dones[i] = True
+                            won = bool(infos[i].get("won", False))
+                            overall_success_this_round[i] = won
+
+                            gamefile = infos[i].get("extra.gamefile", "")
+                            matched = False
+                            for task in TASKS:
+                                if task in gamefile:
+                                    task_total_cnt[task] += 1
+                                    if won:
+                                        task_success_cnt[task] += 1
+                                    matched = True
+                                    break
+                            if not matched:
+                                task_total_cnt["other"] += 1
+                                if won:
+                                    task_success_cnt["other"] += 1
+
+                    pbar.set_postfix(
+                        test=test_idx,
+                        step=step_idx,
+                        done=f"{np.array(env_dones).sum().item()}/{args.env_num}",
+                        sr=f"{overall_success_this_round.mean().item():.4f}",
+                    )
+                    pbar.update(1)
+
+                    if all(env_dones):
+                        logging.info("All environments finished early!")
+                        pbar.update(args.max_steps - step_idx - 1)
+                        break
+
+                round_success_rate = overall_success_this_round.mean()
+                overall_success_rates.append(round_success_rate)
+                logging.info(f"Test {test_idx} overall success: {round_success_rate:.4f}")
+
+                round_tasks = {}
+                for task in TASKS + ["other"]:
+                    if task_total_cnt.get(task, 0) > 0:
+                        rate = task_success_cnt[task] / task_total_cnt[task]
+                        task_success_history[task].append(rate)
+                        round_tasks[task] = {
+                            "success_rate": rate,
+                            "success_count": int(task_success_cnt[task]),
+                            "count": int(task_total_cnt[task]),
+                        }
+                        logging.info(
+                            f"    {task:<35s}: {rate:.4f} "
+                            f"({task_success_cnt[task]}/{task_total_cnt[task]})"
+                        )
+
+                elapsed = time.time() - start_time
+                logging.info(f"Test {test_idx} time elapsed: {elapsed:.2f}s\n")
+
+                round_summary = {
+                    "round": test_idx,
+                    "overall_success_rate": float(round_success_rate),
+                    "elapsed_seconds": elapsed,
+                    "tasks": round_tasks,
+                }
+                rounds.append(round_summary)
+                (output_dir / f"round_{test_idx}_summary.json").write_text(
+                    json.dumps(round_summary, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
 
         logging.info("=============== Final Summary ===============")
         logging.info(
