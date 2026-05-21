@@ -551,7 +551,9 @@ class TrajectoryCollector:
             model_call_success = np.array(model_call_success, dtype=bool)
             forced_route_model = self._get_forced_route_model()
             route_actions_for_record = (
-                [f"<search>{forced_route_model}</search>"] * len(route_actions_str)
+                [
+                    f"<think>Forced fixed route evaluation.</think><search>{forced_route_model}</search>"
+                ] * len(route_actions_str)
                 if forced_route_model
                 else [self._router_action_for_record(action) for action in route_actions_str]
             )

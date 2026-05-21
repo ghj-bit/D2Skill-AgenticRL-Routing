@@ -454,20 +454,23 @@ class LLMGenerationManager:
                 
         for prediction in predictions:
             if isinstance(prediction, str): # for llm output
-                text = prediction.strip()
-                if "</search>" in text:
-                    text = text.split("</search>", 1)[0] + "</search>"
+                original = prediction.strip()
+                text = original
                 pattern = r"\A<think>\s*(.*?)\s*</think>\s*<search>\s*(.*?)\s*</search>\Z"
                 match = re.fullmatch(pattern, text, re.DOTALL)
                 if match:
                     reasoning = match.group(1).strip()
                     content = match.group(2).strip()
                     llm_name, _ = check_llm_name(content)
-                    action = (
-                        "search"
-                        if reasoning and llm_name in MODEL_CONF
-                        else None
+                    valid = (
+                        bool(reasoning)
+                        and llm_name in MODEL_CONF
+                        and len(re.findall(r"<think>", original)) == 1
+                        and len(re.findall(r"</think>", original)) == 1
+                        and len(re.findall(r"<search>", original)) == 1
+                        and len(re.findall(r"</search>", original)) == 1
                     )
+                    action = "search" if valid else None
                     if action == "search":
                         content = llm_name
                 else:

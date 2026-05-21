@@ -19,6 +19,7 @@ import numpy as np
 from collections import deque
 import re
 from routing.llm_agent.route_service import check_llm_name
+from routing.models_config.models_config import MODEL_CONF
 
 class EpisodeRewardManager:
     """The reward manager.
@@ -97,14 +98,23 @@ class EpisodeRewardManager:
 
     @staticmethod
     def _route_format_valid(response: str) -> bool:
-        match = re.fullmatch(r"\s*<search>(.*?)</search>\s*", response or "", flags=re.DOTALL)
+        text = (response or "").strip()
+        pattern = r"\A<think>\s*(.*?)\s*</think>\s*<search>\s*(.*?)\s*</search>\Z"
+        match = re.fullmatch(pattern, text, flags=re.DOTALL)
         if match is None:
             return False
-        model_name = match.group(1).strip()
-        if not model_name:
+        reasoning = match.group(1).strip()
+        model_name = match.group(2).strip()
+        if not reasoning or not model_name:
             return False
         llm_name, _ = check_llm_name(model_name)
-        return bool(llm_name)
+        return (
+            llm_name in MODEL_CONF
+            and len(re.findall(r"<think>", text)) == 1
+            and len(re.findall(r"</think>", text)) == 1
+            and len(re.findall(r"<search>", text)) == 1
+            and len(re.findall(r"</search>", text)) == 1
+        )
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
