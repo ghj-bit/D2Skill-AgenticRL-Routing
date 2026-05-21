@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 ENGINE="${1:-vllm}"
 if [[ $# -gt 0 ]]; then
@@ -86,3 +87,4 @@ run_one_model "deepseek" "${SCRIPT_DIR}/run_alfworld_deepseek_fixed.sh" "$@"
 run_one_model "qwen3-8B" "${SCRIPT_DIR}/run_alfworld_qwen3_8b_fixed.sh" "$@"
 
 python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT"
+python3 "${SCRIPT_DIR}/aggregate_checkpoint_task_success.py" "${PROJECT_DIR}/checkpoints/verl_agent_alfworld_fixed_route"
