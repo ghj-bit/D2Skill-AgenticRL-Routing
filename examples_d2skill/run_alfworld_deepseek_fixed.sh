@@ -3,12 +3,26 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
+
+if [[ "${DIRECT_FIXED_MODEL_EVAL:-1}" == "1" ]]; then
+    if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then
+        shift
+    fi
+
+    export FIXED_EVAL_MODEL="${FIXED_EVAL_MODEL:-$FIXED_ROUTE_MODEL}"
+    export FIXED_EVAL_API_BASE="${FIXED_EVAL_API_BASE:-https://ai-notebook-inspire.sii.edu.cn/ws-9dcc0e1f-80a4-4af2-bc2f-0e352e7b17e6/project-b795c114-135a-40db-b3d0-19b60f25237b/user-543feed4-0be2-4972-8987-a324af06c93f/vscode/4ff709dd-915e-4392-8a69-12c61dc95edb/adacd345-5b66-42d3-a3a3-94234c2aa3cd/proxy/8055/v1}"
+    export FIXED_EVAL_API_KEY="${FIXED_EVAL_API_KEY:-empty}"
+
+    echo "Launching direct AlfWorld fixed-model eval with model: ${FIXED_EVAL_MODEL}"
+    python3 -m examples_d2skill.fixed_model_alfworld_eval "$@"
+    exit 0
+fi
+
 ENGINE="${1:-vllm}"
 if [[ $# -gt 0 ]]; then
     shift
 fi
-
-export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
 
 bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     routing.force_model_enable=True \
