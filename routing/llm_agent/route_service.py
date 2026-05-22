@@ -52,7 +52,7 @@ def get_llm_response_via_api(prompt,
                 temperature=TAU,
                 top_p=TOP_P,
                 seed=SEED,
-                max_tokens=512,
+                max_tokens=2048,
             )
             break
         except Exception as e:

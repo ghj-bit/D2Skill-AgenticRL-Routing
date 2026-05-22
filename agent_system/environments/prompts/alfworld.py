@@ -14,17 +14,22 @@
 # limitations under the License.
 
 # --------------------- ALFWorld --------------------- #
-ALFWORLD_OUTPUT_INSTRUCTION = """
-Output requirements:
-- Output exactly two blocks and no extra text:
-  <think>...</think>
-  <action>...</action>
-- Keep <think> concise but useful, normally 3-5 short sentences. Do not spend the full 512-token budget on reasoning.
-- You MUST close </think> early enough to output <action>.
-- You MUST output <action> before the response ends.
-- The <action> content MUST be exactly one admissible action copied from the list above.
-"""
+# ALFWORLD_OUTPUT_INSTRUCTION = """
+# Output requirements:
+# - Output exactly two blocks and no extra text:
+#   <think>...</think>
+#   <action>...</action>
+# - Keep <think> concise but useful, normally 3-5 short sentences. Do not spend the full 512-token budget on reasoning.
+# - You MUST close </think> early enough to output <action>.
+# - You MUST output <action> before the response ends.
+# - The <action> content MUST be exactly one admissible action copied from the list above.
+# """
 
+
+ALFWORLD_OUTPUT_INSTRUCTION = """
+# You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags.
+# Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
+"""
 
 # ALFWORLD_OUTPUT_INSTRUCTION = """
 # You MUST follow this output format exactly:
