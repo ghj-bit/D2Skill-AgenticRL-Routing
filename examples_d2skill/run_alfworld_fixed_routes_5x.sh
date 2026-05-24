@@ -9,7 +9,7 @@ if [[ $# -gt 0 ]]; then
     shift
 fi
 
-RUNS="${RUNS:-5}"
+RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 LOG_ROOT="${LOG_ROOT:-${SCRIPT_DIR}/fixed_route_5x_logs}"
 
