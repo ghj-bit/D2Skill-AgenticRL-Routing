@@ -4,16 +4,34 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-ENGINE="${1:-vllm}"
-if [[ $# -gt 0 ]]; then
+ENGINE="vllm"
+if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then
+    ENGINE="$1"
     shift
 fi
 
 RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 LOG_ROOT="${LOG_ROOT:-${SCRIPT_DIR}/fixed_route_5x_logs}"
+FIXED_MODEL_EVAL_SCRIPT="${SCRIPT_DIR}/run_alfworld_fixed_model_eval.sh"
 
 mkdir -p "$LOG_ROOT"
+
+mapfile -t FIXED_MODELS < <(
+    PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}" python3 - <<'PY'
+from routing.models_config.models_config import MODEL_CONF
+
+for model_name in MODEL_CONF:
+    print(model_name)
+PY
+)
+
+if [[ "${#FIXED_MODELS[@]}" -eq 0 ]]; then
+    echo "[FixedRoute5x] error: no models found in routing.models_config.models_config.MODEL_CONF" >&2
+    exit 1
+fi
+
+echo "[FixedRoute5x] models from MODEL_CONF: ${FIXED_MODELS[*]}"
 
 is_run_complete() {
     local log_path="$1"
@@ -54,8 +72,7 @@ PY
 
 run_one_model() {
     local model_label="$1"
-    local script_path="$2"
-    shift 2
+    shift
     local model_log_dir="${LOG_ROOT}/${model_label}"
     mkdir -p "$model_log_dir"
 
@@ -72,19 +89,27 @@ run_one_model() {
         fi
 
         echo "[FixedRoute5x] model=${model_label} seed=${seed} log=${log_path}"
-        bash "$script_path" "$ENGINE" \
-            env.seed="$seed" \
-            trainer.experiment_name="$experiment_name" \
+        API_MODEL="$model_label" \
+            FIXED_EVAL_MODEL="$model_label" \
+            FIXED_EVAL_SEED="$seed" \
+            FIXED_EVAL_OUTPUT_DIR="${model_log_dir}/seed_${seed}_output" \
+            bash "$FIXED_MODEL_EVAL_SCRIPT" \
+            --model "$model_label" \
+            --seed "$seed" \
+            --output-dir "${model_log_dir}/seed_${seed}_output" \
             "$@" \
             2>&1 | tee "$log_path"
         touch "$done_path"
-        python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT" --no-wandb
+        python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT" --no-wandb \
+            || echo "[FixedRoute5x] warning: aggregate_fixed_route_metrics.py found no legacy fixed-route metrics yet"
     done
 }
 
-run_one_model "qwen3-30B" "${SCRIPT_DIR}/run_alfworld_qwen3_30b_fixed.sh" "$@"
-run_one_model "deepseek" "${SCRIPT_DIR}/run_alfworld_deepseek_fixed.sh" "$@"
-run_one_model "qwen3-8B" "${SCRIPT_DIR}/run_alfworld_qwen3_8b_fixed.sh" "$@"
+for model_name in "${FIXED_MODELS[@]}"; do
+    run_one_model "$model_name" "$@"
+done
 
-python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT"
-python3 "${SCRIPT_DIR}/aggregate_checkpoint_task_success.py" "${PROJECT_DIR}/checkpoints/verl_agent_alfworld_fixed_route"
+python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT" \
+    || echo "[FixedRoute5x] warning: aggregate_fixed_route_metrics.py found no legacy fixed-route metrics"
+python3 "${SCRIPT_DIR}/aggregate_checkpoint_task_success.py" "${PROJECT_DIR}/checkpoints/verl_agent_alfworld_fixed_route" \
+    || echo "[FixedRoute5x] warning: aggregate_checkpoint_task_success.py found no checkpoint task-success files"
