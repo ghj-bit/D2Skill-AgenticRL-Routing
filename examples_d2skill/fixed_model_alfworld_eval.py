@@ -181,12 +181,12 @@ class PromptAgentAlfWorldManager:
 
 def resolve_model(model: str, api_base: str | None, api_key: str | None) -> Tuple[str, str, str]:
     normalized = str(model or "").strip().lower()
-    if "qwen3" in normalized or normalized in {"qwen", "qwen-8b", "qwen8b"}:
+    if "qwen3-30b" in normalized or normalized in {"qwen-30b", "qwen30b"}:
+        resolved_model = "Qwen3-30B"
+    elif "qwen3" in normalized or normalized in {"qwen", "qwen-8b", "qwen8b"}:
         resolved_model = "qwen3-8B"
     elif "deepseek" in normalized:
         resolved_model = "deepseek"
-    elif "gemma-2-27b" in normalized or normalized in {"gemma", "gemma-27b", "gemma27b"}:
-        resolved_model = "gemma-2-27B"
     else:
         resolved_model = model
 

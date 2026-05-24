@@ -82,7 +82,7 @@ run_one_model() {
     done
 }
 
-run_one_model "gemma-2-27B" "${SCRIPT_DIR}/run_alfworld_gemma_2_27b_fixed.sh" "$@"
+run_one_model "Qwen3-30B" "${SCRIPT_DIR}/run_alfworld_qwen3_30b_fixed.sh" "$@"
 run_one_model "deepseek" "${SCRIPT_DIR}/run_alfworld_deepseek_fixed.sh" "$@"
 run_one_model "qwen3-8B" "${SCRIPT_DIR}/run_alfworld_qwen3_8b_fixed.sh" "$@"
 

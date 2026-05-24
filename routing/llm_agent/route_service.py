@@ -83,7 +83,7 @@ def get_llm_response_via_api(prompt,
 #     "meta/llama-3.1-8b-instruct": 0.18,
 #     "mistralai/mistral-7b-instruct-v0.3": 0.2,
 #     "mistralai/mixtral-8x22b-instruct-v0.1": 1.2,
-#     "google/gemma-2-27b-it": 0.8,
+#     "Qwen3-30B": 0.8,
 #     "writer/palmyra-creative-122b": 1.8,
 #     "nvidia/llama3-chatqa-1.5-8b": 0.18,
 # }
@@ -92,7 +92,7 @@ def get_llm_response_via_api(prompt,
 API_PRICE_1M_TOKENS = {
     "qwen3-8B": 0.1,
     "deepseek": 2.0,
-    "gemma-2-27B": 0.8,
+    "Qwen3-30B": 0.8,
 }
 
 
@@ -198,18 +198,18 @@ def check_llm_name(target_llm):
     #     LLM_NAME = "mistralai/mixtral-8x22b-instruct-v0.1"
     # elif "granite" in target_llm:
     #     LLM_NAME = "ibm/granite-3.0-8b-instruct"
-    # elif "gemma" in target_llm:
-    #     LLM_NAME = "google/gemma-2-27b-it"
+    # elif "qwen3-30b" in target_llm:
+    #     LLM_NAME = "Qwen3-30B"
     #     TAU = 0.1
     # else:
     #     # print("!!!!!!!!!!!LLM Name Error!!!!!!!!!!!", target_llm)
     #     LLM_NAME = ""
-    if "qwen3" in target_llm or target_llm in {"qwen", "qwen-8b", "qwen8b"}:
+    if "qwen3-30b" in target_llm or target_llm in {"qwen-30b", "qwen30b"}:
+        LLM_NAME = "Qwen3-30B"
+    elif "qwen3" in target_llm or target_llm in {"qwen", "qwen-8b", "qwen8b"}:
         LLM_NAME = "qwen3-8B"
     elif "deepseek" in target_llm:
         LLM_NAME = "deepseek"
-    elif "gemma-2-27b" in target_llm or target_llm in {"gemma", "gemma-27b", "gemma27b"}:
-        LLM_NAME = "gemma-2-27B"
     else:
         LLM_NAME = ""
     return LLM_NAME, TAU
