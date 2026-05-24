@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-Qwen3-30B}"
+export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-qwen3-30B}"
 
 if [[ "${DIRECT_FIXED_MODEL_EVAL:-1}" == "1" ]]; then
     if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then

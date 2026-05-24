@@ -71,10 +71,15 @@ def get_llm_response_via_api(prompt,
     total_tokens = getattr(meta_info, "total_tokens", None)
     if total_tokens is None:
         total_tokens = prompt_tokens + completion_tokens
+    token_usage = {
+        "prompt_tokens": int(prompt_tokens),
+        "completion_tokens": int(completion_tokens),
+        "total_tokens": int(total_tokens),
+    }
     if len(contents) == 1:
-        return contents[0].message.content, total_tokens
+        return contents[0].message.content, token_usage
     else:
-        return [c.message.content for c in contents], total_tokens
+        return [c.message.content for c in contents], token_usage
 
 
 # API_PRICE_1M_TOKENS = {
@@ -83,17 +88,35 @@ def get_llm_response_via_api(prompt,
 #     "meta/llama-3.1-8b-instruct": 0.18,
 #     "mistralai/mistral-7b-instruct-v0.3": 0.2,
 #     "mistralai/mixtral-8x22b-instruct-v0.1": 1.2,
-#     "Qwen3-30B": 0.8,
+#     "qwen3-30B": 0.8,
 #     "writer/palmyra-creative-122b": 1.8,
 #     "nvidia/llama3-chatqa-1.5-8b": 0.18,
 # }
 
 
 API_PRICE_1M_TOKENS = {
-    "qwen3-8B": 0.1,
-    "deepseek": 2.0,
-    "Qwen3-30B": 0.8,
+    "qwen3-8B": {
+        "input": 0.050,
+        "output": 0.200,
+    },
+    "qwen3-30B": {
+        "input": 0.090,
+        "output": 0.300,
+    },
+    "deepseek": {
+        "input": 0.252,
+        "output": 0.378,
+    },
 }
+
+
+def calculate_token_cost(model_name, token_usage):
+    prices = API_PRICE_1M_TOKENS.get(model_name, {})
+    input_price = float(prices.get("input", 0.0))
+    output_price = float(prices.get("output", 0.0))
+    prompt_tokens = int(token_usage.get("prompt_tokens", 0) or 0)
+    completion_tokens = int(token_usage.get("completion_tokens", 0) or 0)
+    return prompt_tokens * input_price + completion_tokens * output_price
 
 
 AGENT_PROMPT = """
@@ -154,19 +177,19 @@ def request_task(data):
     # print(LLM_NAME)
     try:
         print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}')
-        single_response, total_tokens = get_llm_response_via_api(prompt=query_text,
-                                                                 base_url=api_base,
-                                                                 api_key=api_key,
-                                                                 TAU=TAU,
-                                                                 LLM_MODEL=LLM_NAME)
-        print(single_response, total_tokens)
+        single_response, token_usage = get_llm_response_via_api(prompt=query_text,
+                                                                base_url=api_base,
+                                                                api_key=api_key,
+                                                                TAU=TAU,
+                                                                LLM_MODEL=LLM_NAME)
+        print(single_response, token_usage)
         # print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}, response: {single_response}')
     except Exception as e:
         print(e)
         single_response = "API Request Error"
-        total_tokens = 0.0
+        token_usage = {}
 
-    return q_id, single_response, int(total_tokens) * API_PRICE_1M_TOKENS[LLM_NAME], LLM_NAME
+    return q_id, single_response, calculate_token_cost(LLM_NAME, token_usage), LLM_NAME
 
 
 def check_llm_name(target_llm):
@@ -199,14 +222,14 @@ def check_llm_name(target_llm):
     # elif "granite" in target_llm:
     #     LLM_NAME = "ibm/granite-3.0-8b-instruct"
     # elif "qwen3-30b" in target_llm:
-    #     LLM_NAME = "Qwen3-30B"
+    #     LLM_NAME = "qwen3-30B"
     #     TAU = 0.1
     # else:
     #     # print("!!!!!!!!!!!LLM Name Error!!!!!!!!!!!", target_llm)
     #     LLM_NAME = ""
     if "qwen3-30b" in target_llm or target_llm in {"qwen-30b", "qwen30b"}:
-        LLM_NAME = "Qwen3-30B"
-    elif "qwen3" in target_llm or target_llm in {"qwen", "qwen-8b", "qwen8b"}:
+        LLM_NAME = "qwen3-30B"
+    elif "qwen3-8b" in target_llm or target_llm in {"qwen-8b", "qwen8b"}:
         LLM_NAME = "qwen3-8B"
     elif "deepseek" in target_llm:
         LLM_NAME = "deepseek"
@@ -255,7 +278,7 @@ def access_routing_pool(queries, api_base, api_key):
 
     return {
         "result": resp,
-        # Keep the existing key for caller compatibility; values now use total tokens.
+        # Keep the existing key for caller compatibility; values are weighted token costs.
         "completion_tokens_list": total_token_costs,
         "called_model_names": called_model_names,
     }

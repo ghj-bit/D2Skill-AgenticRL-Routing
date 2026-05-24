@@ -6,8 +6,8 @@
 #     and seamless switching between thinking and non-thinking modes for balancing reasoning quality and inference efficiency. \
 #     Qwen3-8B is optimized for structured response generation, creative writing, dialogue interaction, and complex language understanding tasks.
 
-#     **Qwen3-30B**:
-#     Qwen3-30B is a 30-billion-parameter language model from Alibaba's Qwen3 series, optimized for advanced reasoning, \
+#     **qwen3-30B**:
+#     qwen3-30B is a 30-billion-parameter language model from Alibaba's Qwen3 series, optimized for advanced reasoning, \
 #     coding, mathematical problem solving, multilingual text generation, and structured instruction following in agentic workflows.
 
 #     **Deepseek-v3.2**:
@@ -28,8 +28,8 @@ MODELS_INTRODTION = """
     and structured response generation, with native 32K context and extended multilingual capability across more than 100 languages.
 
 
-    **Qwen3-30B**:
-    Qwen3-30B-A3B is a 30.5-billion-parameter Mixture-of-Experts (MoE) language model developed by Alibaba as part of the Qwen3 series.\
+    **qwen3-30B**:
+    qwen3-30B-A3B is a 30.5-billion-parameter Mixture-of-Experts (MoE) language model developed by Alibaba as part of the Qwen3 series.\
     It activates only 3.3B parameters during inference for improved efficiency while maintaining strong performance in reasoning, coding, \
     mathematics, multilingual understanding, and instruction following. The model supports long-context processing and structured text generation across over 100 languages.
 
