@@ -116,7 +116,7 @@ def calculate_token_cost(model_name, token_usage):
     output_price = float(prices.get("output", 0.0))
     prompt_tokens = int(token_usage.get("prompt_tokens", 0) or 0)
     completion_tokens = int(token_usage.get("completion_tokens", 0) or 0)
-    return prompt_tokens * input_price + completion_tokens * output_price
+    return (prompt_tokens * input_price + completion_tokens * output_price) / 1_000_000
 
 
 AGENT_PROMPT = """
@@ -278,7 +278,7 @@ def access_routing_pool(queries, api_base, api_key):
 
     return {
         "result": resp,
-        # Keep the existing key for caller compatibility; values are weighted token costs.
+        # Keep the existing key for caller compatibility; values are real API costs.
         "completion_tokens_list": total_token_costs,
         "called_model_names": called_model_names,
     }

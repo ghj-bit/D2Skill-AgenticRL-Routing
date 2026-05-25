@@ -103,8 +103,8 @@ def build_token_usage(usage, model_name: str) -> dict:
     prices = API_PRICE_1M_TOKENS.get(model_name, {})
     input_price_per_1m = float(prices.get("input", 0.0))
     output_price_per_1m = float(prices.get("output", 0.0))
-    input_token_cost = float(prompt_tokens * input_price_per_1m)
-    output_token_cost = float(completion_tokens * output_price_per_1m)
+    input_token_cost = float(prompt_tokens * input_price_per_1m / 1_000_000)
+    output_token_cost = float(completion_tokens * output_price_per_1m / 1_000_000)
     token_cost = input_token_cost + output_token_cost
     return {
         "prompt_tokens": prompt_tokens,
@@ -113,9 +113,9 @@ def build_token_usage(usage, model_name: str) -> dict:
         "input_token_cost": input_token_cost,
         "output_token_cost": output_token_cost,
         "token_cost": token_cost,
-        "estimated_input_api_cost": input_token_cost / 1_000_000,
-        "estimated_output_api_cost": output_token_cost / 1_000_000,
-        "estimated_api_cost": token_cost / 1_000_000,
+        "estimated_input_api_cost": input_token_cost,
+        "estimated_output_api_cost": output_token_cost,
+        "estimated_api_cost": token_cost,
     }
 
 
