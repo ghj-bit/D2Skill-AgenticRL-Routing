@@ -911,9 +911,27 @@ class RayPPOTrainer:
                 val_per_step_retrieved_list.append(
                     test_output_gen_batch.non_tensor_batch.get("per_step_retrieved_by_traj")
                 )
-            # Remove trajectory-level keys so val_reward_fn / data[i] do not index by row -> IndexError
             if hasattr(test_output_gen_batch, "non_tensor_batch"):
-                test_output_gen_batch.non_tensor_batch.pop("per_step_retrieved_by_traj", None)
+                nt = test_output_gen_batch.non_tensor_batch
+                if nt.get("per_step_retrieved_by_traj") is None and nt.get("per_step_retrieved_for_record") is not None and nt.get("traj_index") is not None:
+                    ti = np.asarray(nt["traj_index"]).ravel().astype(np.int64)
+                    ps = np.asarray(nt["per_step_retrieved_for_record"], dtype=object)
+                    if ps.ndim == 2 and ps.size > 0:
+                        rows, cols = ps.shape
+                        flat = np.empty(rows, dtype=object)
+                        for ri in range(rows):
+                            flat[ri] = [ps[ri, cj] for cj in range(cols)]
+                        ps = flat
+                    else:
+                        ps = ps.ravel()
+                    nt["per_step_retrieved_by_traj"] = np.array(
+                        [ps[int(t)] if 0 <= int(t) < len(ps) else [] for t in ti],
+                        dtype=object,
+                    )
+            # Remove trajectory-level-only keys so val_reward_fn / data[i] do not index by row -> IndexError.
+            # Keep row-level per_step_retrieved_by_traj until trajectory collection below so saved
+            # success/failure trajectory files can include retrieved skills for each turn.
+            if hasattr(test_output_gen_batch, "non_tensor_batch"):
                 test_output_gen_batch.non_tensor_batch.pop("per_step_retrieved_for_record", None)
             del test_batch
             test_batch = test_output_gen_batch
@@ -1035,6 +1053,9 @@ class RayPPOTrainer:
                 with_skills_mask=test_batch.non_tensor_batch.get("with_skills_mask"),
             )
             all_successful_trajectories.extend(successful_this_batch)
+
+            if hasattr(test_batch, "non_tensor_batch"):
+                test_batch.non_tensor_batch.pop("per_step_retrieved_by_traj", None)
 
             reward_tensor_lst.append(reward_tensor)
             data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
@@ -1562,6 +1583,74 @@ class RayPPOTrainer:
                 out.append([])
         return out
 
+    @staticmethod
+    def _normalize_per_step_skill_list(value):
+        """Return one trajectory's per-step retrieved-skill snapshots as a plain list."""
+        if value is None:
+            return []
+        if isinstance(value, np.ndarray):
+            value = value.tolist()
+        if isinstance(value, tuple):
+            value = list(value)
+        if not isinstance(value, list):
+            return [value]
+        return value
+
+    @staticmethod
+    def _per_step_skills_by_traj_uid(non_tensor_batch: dict) -> dict:
+        """Map traj_uid -> full per-step retrieved-skill snapshots for saved trajectories."""
+        traj_uids = non_tensor_batch.get("traj_uid") if non_tensor_batch else None
+        if traj_uids is None:
+            return {}
+        traj_uids = np.asarray(traj_uids, dtype=object).ravel()
+        if traj_uids.size == 0:
+            return {}
+
+        per_step = non_tensor_batch.get("per_step_retrieved_by_traj")
+        if per_step is None:
+            per_step = non_tensor_batch.get("per_step_retrieved_for_record")
+        if per_step is None:
+            return {}
+
+        arr = np.asarray(per_step, dtype=object)
+        if arr.ndim == 2 and arr.size > 0:
+            rows, cols = arr.shape
+            flat = np.empty(rows, dtype=object)
+            for ri in range(rows):
+                flat[ri] = [arr[ri, cj] for cj in range(cols)]
+            arr = flat
+        else:
+            arr = arr.ravel()
+
+        out = {}
+        traj_index = non_tensor_batch.get("traj_index")
+        if len(arr) == len(traj_uids):
+            for idx, tid in enumerate(traj_uids):
+                if tid not in out:
+                    out[tid] = RayPPOTrainer._normalize_per_step_skill_list(arr[idx])
+            return out
+
+        if traj_index is not None:
+            ti = np.asarray(traj_index).ravel().astype(np.int64)
+            if len(ti) == len(traj_uids):
+                for idx, tid in enumerate(traj_uids):
+                    if tid in out:
+                        continue
+                    t = int(ti[idx])
+                    if 0 <= t < len(arr):
+                        out[tid] = RayPPOTrainer._normalize_per_step_skill_list(arr[t])
+                return out
+
+        # Fallback for trajectory-level arrays without traj_index: align by first occurrence order.
+        ordered_tids = []
+        for tid in traj_uids:
+            if tid not in ordered_tids:
+                ordered_tids.append(tid)
+        for i, tid in enumerate(ordered_tids):
+            if i < len(arr):
+                out[tid] = RayPPOTrainer._normalize_per_step_skill_list(arr[i])
+        return out
+
     def _record_retrieved_skills(
         self,
         step: int,
@@ -1931,6 +2020,7 @@ class RayPPOTrainer:
             model_call_success_batch = batch.non_tensor_batch.get('model_call_success') if batch is not None else None
             api_costs_batch = batch.non_tensor_batch.get('api_costs') if batch is not None else None
             success_per_traj_batch = batch.non_tensor_batch.get('success_per_traj') if batch is not None else None
+            per_step_skills_by_traj = self._per_step_skills_by_traj_uid(batch.non_tensor_batch)
             traj_dict = {}
             for idx, (inp, out, score, traj_uid) in enumerate(zip(inputs, outputs, scores, traj_uids)):
                 if success_per_traj_batch is not None and idx < len(success_per_traj_batch):
@@ -2157,6 +2247,7 @@ class RayPPOTrainer:
                 raw_outputs = traj_data.get('model_actions', [])
                 model_call_success = traj_data.get('model_call_success', [])
                 turn_count = max(len(obs_list), len(router_actions), len(raw_outputs))
+                per_step_skills = self._normalize_per_step_skill_list(per_step_skills_by_traj.get(traj_uid))
                 if turn_count > 0:
                     detailed_task = extract_task_from_first_observation(obs_list) or task_short or initial_prompt
                     failed_item['detailed_trajectory'] = {
@@ -2168,6 +2259,11 @@ class RayPPOTrainer:
                                 'model_call_success': model_call_success[i] if i < len(model_call_success) else False,
                                 'model_raw_output': raw_outputs[i] if i < len(raw_outputs) else "",
                                 'model_action': _extract_action_from_output(raw_outputs[i]) if i < len(raw_outputs) else "",
+                                'retrieved_skills': self._json_safe_for_retrieved_skills(per_step_skills[i]) if i < len(per_step_skills) else {
+                                    "query_text": "",
+                                    "task_skills": [],
+                                    "step_skills": [],
+                                },
                             }
                             for i in range(turn_count)
                         ],
@@ -2888,10 +2984,6 @@ class RayPPOTrainer:
                             # Dynamic memory: utility EMA update (only when enable_dynamic_management)
                             if self.config.env.get("skills_only_memory", {}).get("enable_dynamic_management", False):
                                 self._update_skill_utilities_from_rollout(gen_batch_output)
-                            # Remove per-step keys before adjust_batch so row-level indexing never sees trajectory-level length.
-                            if hasattr(gen_batch_output, "non_tensor_batch"):
-                                gen_batch_output.non_tensor_batch.pop("per_step_retrieved_by_traj", None)
-                                gen_batch_output.non_tensor_batch.pop("per_step_retrieved_for_record", None)
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
                         with _timer("gen_max", timing_raw):
                             gen_baseline_batch = deepcopy(gen_batch)
@@ -2944,6 +3036,12 @@ class RayPPOTrainer:
                                 current_step_failures=new_failures,
                                 current_step_successes=new_successes,
                             )
+
+                    # Remove per-step keys before adjust_batch so row-level indexing never sees
+                    # trajectory-level length, after success/failure trajectory files have been built.
+                    if hasattr(batch, "non_tensor_batch"):
+                        batch.non_tensor_batch.pop("per_step_retrieved_by_traj", None)
+                        batch.non_tensor_batch.pop("per_step_retrieved_for_record", None)
 
                     batch = adjust_batch(self.config, batch)
 
