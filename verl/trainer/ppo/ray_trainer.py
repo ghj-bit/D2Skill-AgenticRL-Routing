@@ -48,6 +48,7 @@ from verl.single_controller.ray.base import create_colocated_worker_cls
 from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import agg_loss
 from verl.trainer.ppo.metric_utils import (
+    compute_alfworld_task_cost_metrics,
     compute_data_metrics,
     compute_model_call_metrics,
     compute_throughout_metrics,
@@ -837,6 +838,8 @@ class RayPPOTrainer:
         episode_length_list = []
         success_per_traj_list = []
         called_model_list = []
+        api_cost_list = []
+        alfworld_task_list = []
         success_rate_dict = {}
         val_retrieved_list = []  # collect retrieved_memories per validation batch for logging
         val_per_step_retrieved_list = []  # per-step retrieved skills per batch (when per_step_retrieval is True)
@@ -1062,6 +1065,10 @@ class RayPPOTrainer:
             tool_calling_list.append(test_output_gen_batch.non_tensor_batch['tool_callings'])
             traj_uid_list.append(test_output_gen_batch.non_tensor_batch['traj_uid'])
             episode_length_list.append(test_output_gen_batch.non_tensor_batch['episode_lengths'])
+            if 'api_costs' in test_output_gen_batch.non_tensor_batch:
+                api_cost_list.append(test_output_gen_batch.non_tensor_batch['api_costs'])
+            if 'alfworld_task' in test_output_gen_batch.non_tensor_batch:
+                alfworld_task_list.append(test_output_gen_batch.non_tensor_batch['alfworld_task'])
             if 'called_models' in test_output_gen_batch.non_tensor_batch:
                 called_model_list.append(test_output_gen_batch.non_tensor_batch['called_models'])
             if 'success_per_traj' in test_output_gen_batch.non_tensor_batch:
@@ -1092,6 +1099,8 @@ class RayPPOTrainer:
         episode_lengths = np.concatenate(episode_length_list, axis=0)
         success_per_traj = np.concatenate(success_per_traj_list, axis=0) if success_per_traj_list else reward_tensor.numpy()
         called_models = np.concatenate(called_model_list, axis=0) if called_model_list else None
+        api_costs = np.concatenate(api_cost_list, axis=0) if api_cost_list else None
+        alfworld_tasks = np.concatenate(alfworld_task_list, axis=0) if alfworld_task_list else None
         success_rate = {k: np.mean(v) for k, v in success_rate_dict.items()}
 
         # evaluate test_score based on data source
@@ -1135,6 +1144,17 @@ class RayPPOTrainer:
             metric_dict.update(
                 compute_model_call_metrics(
                     {"traj_uid": traj_uids, "called_models": called_models},
+                    prefix="val",
+                )
+            )
+        if api_costs is not None and alfworld_tasks is not None:
+            metric_dict.update(
+                compute_alfworld_task_cost_metrics(
+                    {
+                        "traj_uid": traj_uids,
+                        "alfworld_task": alfworld_tasks,
+                        "api_costs": api_costs,
+                    },
                     prefix="val",
                 )
             )
@@ -1197,6 +1217,9 @@ class RayPPOTrainer:
             tool_call_metric = f"val/{task}/tool_call_count/mean"
             if tool_call_metric in metric_dict:
                 item["tool_call_count_mean"] = float(metric_dict[tool_call_metric])
+            token_cost_metric = f"val/{task}/token_cost_per_traj/mean"
+            if token_cost_metric in metric_dict:
+                item["token_cost_per_traj_mean"] = float(metric_dict[token_cost_metric])
             task_metrics[task] = item
 
         if not task_metrics:

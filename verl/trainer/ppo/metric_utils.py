@@ -113,6 +113,41 @@ def compute_model_call_metrics(non_tensor_batch: Dict[str, Any], prefix: str) ->
     return metrics
 
 
+def compute_alfworld_task_cost_metrics(non_tensor_batch: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+    """Compute per-task average cumulative external token cost per trajectory."""
+    traj_uids = non_tensor_batch.get("traj_uid")
+    tasks = non_tensor_batch.get("alfworld_task")
+    api_costs = non_tensor_batch.get("api_costs")
+    if traj_uids is None or tasks is None or api_costs is None:
+        return {}
+
+    traj_uids = np.asarray(traj_uids, dtype=object).ravel()
+    tasks = np.asarray(tasks, dtype=object).ravel()
+    api_costs = np.asarray(api_costs, dtype=np.float64).ravel()
+    n = min(traj_uids.size, tasks.size, api_costs.size)
+    if n == 0:
+        return {}
+
+    first_by_traj = {}
+    for i in range(n):
+        tid = traj_uids[i]
+        if tid not in first_by_traj:
+            task = str(tasks[i] or "").strip()
+            if task:
+                first_by_traj[tid] = (task, float(api_costs[i]))
+
+    task_costs = defaultdict(list)
+    for task, cost in first_by_traj.values():
+        task_costs[task].append(cost)
+
+    metrics = {}
+    for task, costs in sorted(task_costs.items()):
+        if costs:
+            metrics[f"{prefix}/{task}/token_cost_per_traj/mean"] = float(np.mean(costs))
+            metrics[f"{prefix}/{task}/token_cost_per_traj/count"] = int(len(costs))
+    return metrics
+
+
 def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str, Any]:
     """
     Computes various metrics from a batch of data for PPO training.
@@ -262,6 +297,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
                 if key == "format_rewards":
                     metrics["step/format_invalid_rate"] = float(np.mean(values < 0))
     metrics.update(compute_model_call_metrics(batch.non_tensor_batch, prefix="episode"))
+    metrics.update(compute_alfworld_task_cost_metrics(batch.non_tensor_batch, prefix="episode"))
     return metrics
 
 

@@ -33,6 +33,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+ALFWORLD_TASKS = (
+    "pick_and_place",
+    "pick_two_obj_and_place",
+    "look_at_obj_in_light",
+    "pick_heat_then_place_in_recep",
+    "pick_cool_then_place_in_recep",
+    "pick_clean_then_place_in_recep",
+)
+
+
+def _alfworld_task_from_info(info: Dict[str, Any]) -> str:
+    gamefile = ""
+    if isinstance(info, dict):
+        gamefile = info.get("extra.gamefile", "") or ""
+    for task in ALFWORLD_TASKS:
+        if task in gamefile:
+            return task
+    return "other" if gamefile else ""
+
 def _skill_input_to_retrieval(s: Dict[str, Any], mode: str = "full") -> str:
     """Text that was used as input (document side) for this skill in retrieval.
     mode: 'full' = title + principle + when_to_apply; 'when_to_apply' = only when_to_apply; 'principle' = only principle.
@@ -587,6 +606,10 @@ class TrajectoryCollector:
             else:
                 batch.non_tensor_batch['env_action_valid'] = np.ones(batch_size, dtype=bool)
             batch.non_tensor_batch['is_action_valid'] = route_format_valid
+            batch.non_tensor_batch['alfworld_task'] = np.array(
+                [_alfworld_task_from_info(info) for info in infos],
+                dtype=object,
+            )
 
             if 'tool_calling' in infos[0]:
                 tool_callings[active_masks] += np.array([info['tool_calling'] for info in infos], dtype=np.float32)[active_masks]
