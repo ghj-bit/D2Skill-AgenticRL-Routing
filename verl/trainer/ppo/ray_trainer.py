@@ -2440,6 +2440,7 @@ class RayPPOTrainer:
         model_names = list(MODEL_CONF.keys())
         episode_rewards = nt.get('episode_rewards')
         success_per_traj = nt.get('success_per_traj')
+        elapsed_seconds = nt.get('model_call_elapsed_seconds')
 
         traj_stats = {}
         for idx, traj_uid in enumerate(traj_uids):
@@ -2448,7 +2449,9 @@ class RayPPOTrainer:
                 traj_stats[traj_uid] = {
                     'traj_uid': traj_uid,
                     'model_call_counts': {},
+                    'model_call_elapsed_seconds': {},
                     'total_model_calls': 0,
+                    'total_model_call_elapsed_seconds': 0.0,
                     'episode_score': 0.0,
                     'success': False,
                 }
@@ -2474,6 +2477,16 @@ class RayPPOTrainer:
                 continue
             traj_stats[traj_uid]['model_call_counts'][called_model] = traj_stats[traj_uid]['model_call_counts'].get(called_model, 0) + 1
             traj_stats[traj_uid]['total_model_calls'] += 1
+            elapsed = 0.0
+            if elapsed_seconds is not None and idx < len(elapsed_seconds):
+                try:
+                    elapsed = max(float(elapsed_seconds[idx]), 0.0)
+                except (TypeError, ValueError):
+                    elapsed = 0.0
+            traj_stats[traj_uid]['model_call_elapsed_seconds'][called_model] = (
+                traj_stats[traj_uid]['model_call_elapsed_seconds'].get(called_model, 0.0) + elapsed
+            )
+            traj_stats[traj_uid]['total_model_call_elapsed_seconds'] += elapsed
 
         failed_trajectories = []
         successful_trajectories = []
@@ -2485,16 +2498,26 @@ class RayPPOTrainer:
 
         def summarize(items: list) -> dict:
             totals = {model_name: 0 for model_name in model_names}
+            elapsed_totals = {model_name: 0.0 for model_name in model_names}
             total_calls = 0
+            total_elapsed = 0.0
             for item in items:
                 total_calls += int(item['total_model_calls'])
+                total_elapsed += float(item.get('total_model_call_elapsed_seconds', 0.0))
                 for model_name, count in item['model_call_counts'].items():
                     totals[model_name] = totals.get(model_name, 0) + int(count)
+                for model_name, elapsed in item.get('model_call_elapsed_seconds', {}).items():
+                    elapsed_totals[model_name] = elapsed_totals.get(model_name, 0.0) + float(elapsed)
             num_trajectories = len(items)
             avg_counts = {
                 model_name: count / num_trajectories
                 for model_name, count in totals.items()
                 if count
+            }
+            avg_elapsed_per_call = {
+                model_name: elapsed_totals[model_name] / totals[model_name]
+                for model_name in elapsed_totals
+                if totals.get(model_name, 0)
             }
             return {
                 'num_trajectories': num_trajectories,
@@ -2502,6 +2525,14 @@ class RayPPOTrainer:
                 'total_model_calls': total_calls,
                 'average_total_model_calls_per_trajectory': total_calls / num_trajectories if num_trajectories else 0.0,
                 'average_model_call_counts_per_trajectory': avg_counts,
+                'total_model_call_elapsed_seconds_by_model': {
+                    model_name: elapsed for model_name, elapsed in elapsed_totals.items() if elapsed
+                },
+                'total_model_call_elapsed_seconds': total_elapsed,
+                'average_total_model_call_elapsed_seconds_per_trajectory': (
+                    total_elapsed / num_trajectories if num_trajectories else 0.0
+                ),
+                'average_model_call_elapsed_seconds_per_call': avg_elapsed_per_call,
                 'per_trajectory': items,
             }
 

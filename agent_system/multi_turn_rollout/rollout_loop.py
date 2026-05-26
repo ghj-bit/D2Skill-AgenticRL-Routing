@@ -563,7 +563,7 @@ class TrajectoryCollector:
             batch = batch.union(batch_output)
             route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
             # print(f'路由器输出：{route_actions_str}')
-            cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success = self.execute_predictions(
+            cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success, model_call_elapsed_seconds = self.execute_predictions(
                 route_actions_str, original_obs
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
@@ -584,6 +584,7 @@ class TrajectoryCollector:
             batch.non_tensor_batch['model_actions'] = np.array(text_model_actions, dtype=object)
             batch.non_tensor_batch['called_models'] = np.array(models, dtype=object)
             batch.non_tensor_batch['model_call_success'] = model_call_success
+            batch.non_tensor_batch['model_call_elapsed_seconds'] = np.asarray(model_call_elapsed_seconds, dtype=np.float32)
             batch = self.keep_router_outputs_only(batch, route_actions_for_record, text_model_actions)
             # print(f"路由模型执行动作：{text_model_actions}")
             next_obs, next_route_obs, rewards, dones, infos = envs.step(text_model_actions, models)
@@ -811,6 +812,7 @@ class TrajectoryCollector:
         model_actions = []
         models = []
         model_call_success = []
+        model_call_elapsed_seconds = []
         # 预处理router输出结果，获得content = model:query 
         #但现在只有model
         contexts = original_obs.get('text', None)
@@ -848,18 +850,21 @@ class TrajectoryCollector:
             ]
         }
         if do_route:
-            route_results, completion_tokens_list, called_model_names = self.batch_route(route_queries)
+            route_results, completion_tokens_list, called_model_names, called_model_elapsed_seconds = self.batch_route(route_queries)
             assert len(route_results) == sum([1 for action in cur_actions if action == 'search'])
             assert len(route_results) == len(completion_tokens_list)
             assert len(route_results) == len(called_model_names)
+            assert len(route_results) == len(called_model_elapsed_seconds)
         else:
             route_results = [''] * sum([1 for action in cur_actions if action == 'search'])
             completion_tokens_list = [0.0] * sum([1 for action in cur_actions if action == 'search'])
             called_model_names = [''] * sum([1 for action in cur_actions if action == 'search'])
+            called_model_elapsed_seconds = [0.0] * sum([1 for action in cur_actions if action == 'search'])
 
         for action in cur_actions:
             if action == 'search':
                 called_model_name = called_model_names.pop(0)
+                elapsed_seconds = called_model_elapsed_seconds.pop(0)
                 route_result = route_results.pop(0)
                 route_result_lower = route_result.strip().lower()
                 if route_result_lower == "llm name error":
@@ -875,18 +880,21 @@ class TrajectoryCollector:
                     models.append(called_model_name)
                     model_call_success.append(True)
                 cur_completion_tokens.append(completion_tokens_list.pop(0))
+                model_call_elapsed_seconds.append(float(elapsed_seconds or 0.0))
             else:
                 model_actions.append('')
                 models.append('')
                 model_call_success.append(False)
                 cur_completion_tokens.append(0.0)
+                model_call_elapsed_seconds.append(0.0)
         # print(f'len(route_results): {len(route_results)}')
         # print(f'len(completion_tokens_list): {len(completion_tokens_list)}')
         # print(f'len(called_model_names): {len(called_model_names)}')
         assert len(route_results) == 0
         assert len(completion_tokens_list) == 0
         assert len(called_model_names) == 0
-        return cur_completion_tokens, model_actions, models, route_format_valids, model_call_success
+        assert len(called_model_elapsed_seconds) == 0
+        return cur_completion_tokens, model_actions, models, route_format_valids, model_call_success, model_call_elapsed_seconds
 
     def _get_forced_route_model(self) -> str:
         """Optional eval hook: force every routed search call to a fixed backend model."""
@@ -965,4 +973,4 @@ class TrajectoryCollector:
     def batch_route(self, queries: Dict = None) -> str:
         ret = access_routing_pool(queries=queries, api_base=self.config.api_base, api_key=self.config.api_key)
         
-        return ret['result'], ret["completion_tokens_list"], ret.get("called_model_names", [])
+        return ret['result'], ret["completion_tokens_list"], ret.get("called_model_names", []), ret.get("model_call_elapsed_seconds", [])

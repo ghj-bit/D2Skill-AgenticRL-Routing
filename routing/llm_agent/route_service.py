@@ -173,8 +173,9 @@ def request_task(data):
     q_id, query_text, TAU, LLM_NAME, api_base, api_key = data
     if LLM_NAME == "":
         print("LLM Name Error")
-        return q_id, "LLM Name Error", 0.0, ""
+        return q_id, "LLM Name Error", 0.0, "", 0.0
     # print(LLM_NAME)
+    start_time = time.time()
     try:
         print(f'LLM_NAME: {LLM_NAME}, query_text: {query_text}')
         single_response, token_usage = get_llm_response_via_api(prompt=query_text,
@@ -188,8 +189,9 @@ def request_task(data):
         print(e)
         single_response = "API Request Error"
         token_usage = {}
+    elapsed_seconds = time.time() - start_time
 
-    return q_id, single_response, calculate_token_cost(LLM_NAME, token_usage), LLM_NAME
+    return q_id, single_response, calculate_token_cost(LLM_NAME, token_usage), LLM_NAME, elapsed_seconds
 
 
 def check_llm_name(target_llm):
@@ -271,14 +273,17 @@ def access_routing_pool(queries, api_base, api_key):
     resp = []
     total_token_costs = []
     called_model_names = []
-    for _, response, token_cost, called_model_name in ret:
+    model_call_elapsed_seconds = []
+    for _, response, token_cost, called_model_name, elapsed_seconds in ret:
         resp.append(response)
         total_token_costs.append(token_cost)
         called_model_names.append(called_model_name)
+        model_call_elapsed_seconds.append(float(elapsed_seconds or 0.0))
 
     return {
         "result": resp,
         # Keep the existing key for caller compatibility; values are real API costs.
         "completion_tokens_list": total_token_costs,
         "called_model_names": called_model_names,
+        "model_call_elapsed_seconds": model_call_elapsed_seconds,
     }
