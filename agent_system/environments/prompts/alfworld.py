@@ -29,6 +29,8 @@
 ALFWORLD_OUTPUT_INSTRUCTION = """
 # You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags.
 # Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
+Rules:
+    - Output ONLY the <think> and <action> blocks.
 """
 
 # ALFWORLD_OUTPUT_INSTRUCTION = """
