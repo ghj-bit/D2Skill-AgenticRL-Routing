@@ -38,7 +38,7 @@ SKILL_RETRIEVAL_SERVICE_URL="http://127.0.0.1:8003/retrieve_batch"
 num_cpus_per_env_worker=0.1
 train_data_size=16
 val_data_size=16
-group_size=8
+group_size=4
 success_reward_weight="${SUCCESS_REWARD_WEIGHT:-1.0}"
 cost_reward_weight="${COST_REWARD_WEIGHT:-1.0}"
 
