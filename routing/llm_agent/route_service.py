@@ -263,7 +263,7 @@ def access_routing_pool(queries, api_base, api_key):
         task_args.append((q_id, query_text, TAU, LLM_NAME, api_base, api_key))
 
     ret = []
-    with ThreadPool(10) as p:
+    with ThreadPool(32) as p:
         for r in tqdm(p.imap_unordered(request_task, task_args), total=len(task_args), desc="Processing", ncols=100):
             ret.append(r)
 
