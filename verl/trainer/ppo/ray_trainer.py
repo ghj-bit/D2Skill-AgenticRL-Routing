@@ -1147,7 +1147,7 @@ class RayPPOTrainer:
                     prefix="val",
                 )
             )
-        if api_costs is not None and alfworld_tasks is not None:
+        if api_costs is not None:
             metric_dict.update(
                 compute_alfworld_task_cost_metrics(
                     {
@@ -1232,6 +1232,16 @@ class RayPPOTrainer:
             "project_name": self.config.trainer.get("project_name", ""),
             "experiment_name": self.config.trainer.get("experiment_name", ""),
             "overall_success_rate": float(metric_dict["val/success_rate"]) if "val/success_rate" in metric_dict else None,
+            "overall_token_cost_per_traj_mean": (
+                float(metric_dict["val/token_cost_per_traj/mean"])
+                if "val/token_cost_per_traj/mean" in metric_dict
+                else None
+            ),
+            "overall_token_cost_per_traj_count": (
+                int(metric_dict["val/token_cost_per_traj/count"])
+                if "val/token_cost_per_traj/count" in metric_dict
+                else 0
+            ),
             "alfworld_tasks": task_metrics,
         }
         payload = self._json_safe_for_retrieved_skills(payload)

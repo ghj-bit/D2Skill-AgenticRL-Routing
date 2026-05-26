@@ -114,17 +114,19 @@ def compute_model_call_metrics(non_tensor_batch: Dict[str, Any], prefix: str) ->
 
 
 def compute_alfworld_task_cost_metrics(non_tensor_batch: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-    """Compute per-task average cumulative external token cost per trajectory."""
+    """Compute average cumulative external token cost per trajectory."""
     traj_uids = non_tensor_batch.get("traj_uid")
     tasks = non_tensor_batch.get("alfworld_task")
     api_costs = non_tensor_batch.get("api_costs")
-    if traj_uids is None or tasks is None or api_costs is None:
+    if traj_uids is None or api_costs is None:
         return {}
 
     traj_uids = np.asarray(traj_uids, dtype=object).ravel()
-    tasks = np.asarray(tasks, dtype=object).ravel()
+    tasks = np.asarray(tasks, dtype=object).ravel() if tasks is not None else None
     api_costs = np.asarray(api_costs, dtype=np.float64).ravel()
-    n = min(traj_uids.size, tasks.size, api_costs.size)
+    n = min(traj_uids.size, api_costs.size)
+    if tasks is not None:
+        n = min(n, tasks.size)
     if n == 0:
         return {}
 
@@ -132,15 +134,19 @@ def compute_alfworld_task_cost_metrics(non_tensor_batch: Dict[str, Any], prefix:
     for i in range(n):
         tid = traj_uids[i]
         if tid not in first_by_traj:
-            task = str(tasks[i] or "").strip()
-            if task:
-                first_by_traj[tid] = (task, float(api_costs[i]))
+            task = str(tasks[i] or "").strip() if tasks is not None else ""
+            first_by_traj[tid] = (task, float(api_costs[i]))
 
     task_costs = defaultdict(list)
     for task, cost in first_by_traj.values():
-        task_costs[task].append(cost)
+        if task:
+            task_costs[task].append(cost)
 
-    metrics = {}
+    all_costs = [cost for _, cost in first_by_traj.values()]
+    metrics = {
+        f"{prefix}/token_cost_per_traj/mean": float(np.mean(all_costs)),
+        f"{prefix}/token_cost_per_traj/count": int(len(all_costs)),
+    }
     for task, costs in sorted(task_costs.items()):
         if costs:
             metrics[f"{prefix}/{task}/token_cost_per_traj/mean"] = float(np.mean(costs))
