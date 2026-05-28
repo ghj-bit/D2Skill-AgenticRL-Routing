@@ -19,7 +19,8 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     routing.force_model_name="$FIXED_ROUTE_MODEL" \
     routing.skip_router_generation=True \
     data.val_batch_size="$VAL_DATA_SIZE" \
-    env.seed=-999 \
+    env.seed=0 \
+    +env.val_seed=1 \
     env.use_skills_only_memory=False \
     env.skills_only_memory.enable_dynamic_update=True \
     env.skills_only_memory.update_source=validation \
