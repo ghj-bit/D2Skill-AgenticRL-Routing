@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
+export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
 
 ENGINE="vllm"
 if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then
@@ -19,6 +20,7 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     env.skills_only_memory.update_source=validation \
     env.skills_only_memory.update_save_traj=True \
     trainer.val_only=True \
+    +trainer.fixed_eval_style_logging="$FIXED_EVAL_STYLE_LOGGING" \
     +trainer.write_validation_alfworld_task_success=True \
     trainer.n_gpus_per_node=4 \
     actor_rollout_ref.actor.ppo_mini_batch_size=64 \

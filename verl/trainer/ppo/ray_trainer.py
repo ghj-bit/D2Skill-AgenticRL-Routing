@@ -1159,6 +1159,15 @@ class RayPPOTrainer:
                 )
             )
         self._write_validation_alfworld_task_success(metric_dict)
+        self._write_fixed_eval_style_validation_log(
+            metric_dict=metric_dict,
+            traj_uids=traj_uids,
+            unique_idx=unique_idx,
+            episode_lengths=episode_lengths,
+            success_per_traj=success_per_traj,
+            alfworld_tasks=alfworld_tasks,
+            api_costs=api_costs,
+        )
 
         # Dynamic Skill Bank Update (validation side): write to both val/train retrieval_memory.
         # If update_source is train/all, the train loop also runs _update_skills_from_training_data;
@@ -1180,6 +1189,106 @@ class RayPPOTrainer:
         self._run_skill_eviction_after_validation()
 
         return metric_dict
+
+    def _write_fixed_eval_style_validation_log(
+        self,
+        metric_dict: dict,
+        traj_uids,
+        unique_idx,
+        episode_lengths,
+        success_per_traj,
+        alfworld_tasks=None,
+        api_costs=None,
+    ) -> None:
+        """Write compact fixed-model-eval style validation logs when explicitly enabled."""
+        if not self.config.trainer.get("fixed_eval_style_logging", False):
+            return
+
+        unique_idx = np.asarray(unique_idx, dtype=np.int64)
+        unique_traj_uids = np.asarray(traj_uids, dtype=object)[unique_idx]
+        unique_success = np.asarray(success_per_traj, dtype=np.float32)[unique_idx] > 0
+        unique_lengths = np.asarray(episode_lengths, dtype=np.float32)[unique_idx]
+
+        if alfworld_tasks is not None:
+            unique_tasks = np.asarray(alfworld_tasks, dtype=object)[unique_idx]
+        else:
+            unique_tasks = np.asarray(["unknown"] * len(unique_idx), dtype=object)
+
+        if api_costs is not None:
+            unique_costs = np.asarray(api_costs, dtype=np.float32)[unique_idx]
+        else:
+            unique_costs = np.zeros(len(unique_idx), dtype=np.float32)
+
+        task_stats = defaultdict(lambda: {"success": 0, "total": 0, "api_cost": 0.0})
+        per_env_results = {}
+        for i, uid in enumerate(unique_traj_uids):
+            task = str(unique_tasks[i] or "unknown")
+            won = bool(unique_success[i])
+            cost = float(unique_costs[i])
+            task_stats[task]["total"] += 1
+            task_stats[task]["success"] += int(won)
+            task_stats[task]["api_cost"] += cost
+            per_env_results[str(i)] = {
+                "traj_uid": str(uid),
+                "won": won,
+                "task": task,
+                "finished_step": int(unique_lengths[i]) if np.isfinite(unique_lengths[i]) else None,
+                "api_cost": cost,
+            }
+
+        task_rates = {}
+        for task, item in sorted(task_stats.items()):
+            total = int(item["total"])
+            if total <= 0:
+                continue
+            task_rates[task] = {
+                "success_rate": float(item["success"] / total),
+                "success": int(item["success"]),
+                "total": total,
+                "api_cost": float(item["api_cost"]),
+                "avg_api_cost": float(item["api_cost"] / total),
+            }
+
+        overall_success = float(np.mean(unique_success)) if unique_success.size else 0.0
+        result = {
+            "global_step": int(getattr(self, "global_steps", 0)),
+            "model": self.config.get("routing", {}).get("force_model_name", ""),
+            "env_num": int(len(unique_idx)),
+            "max_steps": int(self.config.env.max_steps),
+            "finished_envs": int(len(unique_idx)),
+            "overall_success_rate": overall_success,
+            "task_rates": task_rates,
+            "api_cost": {
+                "total": float(np.sum(unique_costs)) if unique_costs.size else 0.0,
+                "avg_per_traj": float(np.mean(unique_costs)) if unique_costs.size else 0.0,
+            },
+            "per_env_results": per_env_results,
+            "metrics": {
+                key: float(value)
+                for key, value in metric_dict.items()
+                if isinstance(value, (int, float, np.integer, np.floating, np.bool_))
+            },
+        }
+        result = self._json_safe_for_retrieved_skills(result)
+
+        save_dir = self.config.trainer.get("default_local_dir", "./outputs")
+        os.makedirs(save_dir, exist_ok=True)
+        result_path = os.path.join(save_dir, f"fixed_eval_validation_result_step{self.global_steps}.json")
+        with open(result_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+
+        print(
+            f"[FixedEval] Validation overall success: {overall_success:.4f}; "
+            f"result file: {result_path}",
+            flush=True,
+        )
+        for task, item in task_rates.items():
+            print(
+                f"[FixedEval] {task:<35s}: {item['success_rate']:.4f} "
+                f"({item['success']}/{item['total']}) | "
+                f"avg_api_cost={item['avg_api_cost']:.6f}",
+                flush=True,
+            )
 
     def _write_validation_alfworld_task_success(self, metric_dict: dict) -> None:
         """Persist per-ALFWorld-task validation success rates in this experiment dir."""

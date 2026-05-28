@@ -562,6 +562,10 @@ class TrajectoryCollector:
             uid = str(uuid.uuid4())
             uid_batch = np.array([uid for _ in range(len(gen_batch.batch))], dtype=object)
         is_done = np.zeros(batch_size, dtype=bool)
+        fixed_eval_style_logging = bool(
+            self.config.get("trainer", {}).get("fixed_eval_style_logging", False)
+        )
+        fixed_eval_success = np.zeros(batch_size, dtype=bool)
         traj_uid = np.array([str(uuid.uuid4()) for _ in range(batch_size)], dtype=object)
         total_batch_list = [[] for _ in range(batch_size)]
         total_infos = [[] for _ in range(batch_size)]
@@ -573,6 +577,12 @@ class TrajectoryCollector:
         # original_obs = obs
         # Trajectory collection loop
         for _step in range(self.config.env.max_steps):
+            if fixed_eval_style_logging:
+                print(
+                    f"[FixedEval] Step {_step}; Dones ({int(is_done.sum())}/{batch_size}); "
+                    f"SR {float(fixed_eval_success.mean()):.4f}",
+                    flush=True,
+                )
             active_masks = np.logical_not(is_done)
 
             batch = self.preprocess_batch(gen_batch=gen_batch, obs=route_obs)
@@ -687,6 +697,10 @@ class TrajectoryCollector:
                 total_infos[i].append(infos[i])
 
             # Update done states
+            newly_done = np.logical_and(np.logical_not(is_done), dones)
+            if fixed_eval_style_logging and np.any(newly_done):
+                for i in np.where(newly_done)[0]:
+                    fixed_eval_success[i] = bool(infos[i].get("won", False))
             is_done = np.logical_or(is_done, dones)
                 
             # Update observations for next step
@@ -694,6 +708,12 @@ class TrajectoryCollector:
             original_obs = next_obs
             # Break if all environments are done
             if is_done.all():
+                if fixed_eval_style_logging:
+                    print(
+                        f"[FixedEval] Finished early at step {_step}; "
+                        f"SR {float(fixed_eval_success.mean()):.4f}",
+                        flush=True,
+                    )
                 break
         
         success: Dict[str, np.ndarray] = envs.success_evaluator(
