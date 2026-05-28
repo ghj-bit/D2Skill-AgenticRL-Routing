@@ -23,3 +23,6 @@ core.*
 *.egg-info
 /agent_system/environments/env_package/
 /summary_val
+alfworld.zip
+test_nvidia_api.py
+/agent_system/environments/alfworld_envs.py

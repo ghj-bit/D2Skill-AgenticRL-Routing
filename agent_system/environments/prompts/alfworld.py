@@ -31,6 +31,7 @@ ALFWORLD_OUTPUT_INSTRUCTION = """
 # Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
 Rules:
     - Output ONLY the <think> and <action> blocks.
+    - Do not output <reasoning>
 """
 
 # ALFWORLD_OUTPUT_INSTRUCTION = """

@@ -36,7 +36,8 @@ class EpisodeRewardManager:
         cost_percentile_high=0.95,
         cost_transform="sqrt",
         success_reward_weight=1.0,
-        cost_reward_weight=1.0,
+        cost_reward_weight=0.0,
+        step_cost_reward_weight=None,
     ) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
@@ -47,6 +48,9 @@ class EpisodeRewardManager:
         self.cost_transform = cost_transform
         self.success_reward_weight = float(success_reward_weight)
         self.cost_reward_weight = float(cost_reward_weight)
+        if step_cost_reward_weight is None:
+            step_cost_reward_weight = self.cost_reward_weight
+        self.step_cost_reward_weight = float(step_cost_reward_weight)
         self._cost_eps = 1e-8
         cost_buffer_size = int(cost_normalization_window or 1000)
         self._episode_cost_buffer = deque(maxlen=cost_buffer_size)
@@ -165,13 +169,19 @@ class EpisodeRewardManager:
             step_api_cost = float(data_item.non_tensor_batch.get('step_api_costs', api_cost))
             format_valid = self._route_format_valid(response_str)
             base_score = self._episode_base_reward(data_item)
-            cost_reward = self._normalize_cost_reward(api_cost, self._episode_cost_buffer)
-            step_cost_reward = self._normalize_cost_reward(step_api_cost, self._step_cost_buffer)
-            format_reward = 0.0 if format_valid else -1.0
-            if self.cost_reward_weight == 0:
-                step_reward = 0.0 if format_valid else -1.0
+            if self.cost_reward_weight > 0:
+                cost_reward = self._normalize_cost_reward(api_cost, self._episode_cost_buffer)
             else:
-                step_reward = float(step_cost_reward) if format_valid else -1.0
+                cost_reward = 0.0
+            if self.step_cost_reward_weight > 0:
+                step_cost_reward = (
+                    self._normalize_cost_reward(step_api_cost, self._step_cost_buffer)
+                    * self.step_cost_reward_weight
+                )
+            else:
+                step_cost_reward = 0.0
+            format_reward = 0.0 if format_valid else -1.0
+            step_reward = float(step_cost_reward) if format_valid else -1.0
             if self.cost_reward_weight > 0 and (self.cost_apply_on_nonpositive or float(base_score) > 0):
                 score = float(base_score) * self.success_reward_weight + cost_reward * self.cost_reward_weight
             else:

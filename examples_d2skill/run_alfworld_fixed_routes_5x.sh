@@ -94,9 +94,9 @@ run_one_model() {
             FIXED_EVAL_SEED="$seed" \
             FIXED_EVAL_OUTPUT_DIR="${model_log_dir}/seed_${seed}_output" \
             bash "$FIXED_MODEL_EVAL_SCRIPT" \
-            --model "$model_label" \
-            --seed "$seed" \
-            --output-dir "${model_log_dir}/seed_${seed}_output" \
+            "$ENGINE" \
+            env.seed="$seed" \
+            trainer.experiment_name="$experiment_name" \
             "$@" \
             2>&1 | tee "$log_path"
         touch "$done_path"

@@ -167,7 +167,11 @@ class TaskRunner:
             "cost_percentile_high": config.reward_model.get("cost_percentile_high", 0.95),
             "cost_transform": config.reward_model.get("cost_transform", "sqrt"),
             "success_reward_weight": config.reward_model.get("success_reward_weight", 1.0),
-            "cost_reward_weight": config.reward_model.get("cost_reward_weight", 1.0),
+            "cost_reward_weight": config.reward_model.get("cost_reward_weight", 0.0),
+            "step_cost_reward_weight": config.reward_model.get(
+                "step_cost_reward_weight",
+                config.reward_model.get("cost_reward_weight", 0.0),
+            ),
         }
         reward_fn = reward_manager_cls(
             tokenizer=tokenizer,

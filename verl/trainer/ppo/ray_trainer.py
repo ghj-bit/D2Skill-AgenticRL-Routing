@@ -2963,6 +2963,15 @@ class RayPPOTrainer:
         if getattr(self.envs, "retrieval_memory", None) and self.config.env.get("skills_only_memory", {}).get("skill_retrieval_service_url"):
             self._sync_skills_to_retrieval_server(self.envs.retrieval_memory)
 
+        if self.config.trainer.get("val_only", False):
+            if self.val_reward_fn is None:
+                raise ValueError("trainer.val_only=True requires a validation reward function")
+            val_metrics = self._validate()
+            assert val_metrics, f"{val_metrics=}"
+            pprint(f"Validation-only metrics: {val_metrics}")
+            logger.log(data=val_metrics, step=self.global_steps)
+            return
+
         # perform validation before training
         # currently, we only support validation using the reward_function.
         if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
@@ -2970,8 +2979,6 @@ class RayPPOTrainer:
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
             logger.log(data=val_metrics, step=self.global_steps)
-            if self.config.trainer.get("val_only", False):
-                return
 
         # add tqdm
         progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")

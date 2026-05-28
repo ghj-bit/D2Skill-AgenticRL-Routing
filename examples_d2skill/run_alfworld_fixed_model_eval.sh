@@ -1,23 +1,35 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ENV_NAME="alfoworld"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# ---------------- Fixed model API config ----------------
-# Defaults can be overridden by API_MODEL/API_BASE/API_KEY or FIXED_EVAL_*.
-# If API_BASE is empty, fixed_model_alfworld_eval.py resolves it from MODEL_CONF.
-API_MODEL="${API_MODEL:-${FIXED_EVAL_MODEL:-qwen2.5-7B}}"
-API_BASE="${API_BASE:-${FIXED_EVAL_API_BASE:-}}"
-API_KEY="${API_KEY:-${FIXED_EVAL_API_KEY:-empty}}"
-
-export FIXED_EVAL_MODEL="$API_MODEL"
-export FIXED_EVAL_API_BASE="$API_BASE"
-export FIXED_EVAL_API_KEY="$API_KEY"
-
-if [[ "$ENV_NAME" == "alfoworld" ]]; then
-  echo "Launching AlfWorld fixed-model eval with model: ${FIXED_EVAL_MODEL}"
-  python3 -m examples_d2skill.fixed_model_alfworld_eval "$@"
-else
-  echo "Error: Unsupported environment '$ENV_NAME'. Use 'alfoworld'." >&2
-  exit 1
+ENGINE="vllm"
+if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then
+  ENGINE="$1"
+  shift
 fi
+
+# Defaults can be overridden by API_MODEL/FIXED_EVAL_MODEL.
+FIXED_ROUTE_MODEL="${API_MODEL:-${FIXED_EVAL_MODEL:-deepseek}}"
+export FIXED_ROUTE_MODEL
+
+echo "Launching validation-only fixed-route AlfWorld eval with model: ${FIXED_ROUTE_MODEL}"
+bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
+  routing.force_model_enable=True \
+  routing.force_model_name="$FIXED_ROUTE_MODEL" \
+  routing.skip_router_generation=True \
+  env.skills_only_memory.enable_dynamic_update=True \
+  env.skills_only_memory.update_source=validation \
+  env.skills_only_memory.update_save_traj=True \
+  trainer.val_only=True \
+  +trainer.write_validation_alfworld_task_success=True \
+  trainer.n_gpus_per_node=4 \
+  actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+  actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
+  actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
+  actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
+  actor_rollout_ref.rollout.max_num_seqs=256 \
+  ray_init.num_cpus=40 \
+  trainer.project_name='verl_agent_alfworld_fixed_route' \
+  trainer.experiment_name="fixed_${FIXED_ROUTE_MODEL}" \
+  "$@"

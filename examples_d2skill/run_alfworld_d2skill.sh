@@ -40,7 +40,8 @@ train_data_size=16
 val_data_size=16
 group_size=4
 success_reward_weight="${SUCCESS_REWARD_WEIGHT:-1.0}"
-cost_reward_weight="${COST_REWARD_WEIGHT:-1.0}"
+cost_reward_weight="${COST_REWARD_WEIGHT:-0.0}"
+step_cost_reward_weight="${STEP_COST_REWARD_WEIGHT:-0.0}"
 
 ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen2.5-3B-Instruct"
 # ACTOR_MODEL_PATH="/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen2.5-7B-Instruct"
@@ -89,6 +90,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.invalid_action_penalty_coef=1.0 \
     reward_model.success_reward_weight=$success_reward_weight \
     reward_model.cost_reward_weight=$cost_reward_weight \
+    reward_model.step_cost_reward_weight=$step_cost_reward_weight \
     algorithm.use_kl_in_reward=False \
     env.env_name=alfworld/AlfredTWEnv \
     env.seed=0 \

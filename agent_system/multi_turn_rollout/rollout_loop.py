@@ -340,6 +340,48 @@ class TrajectoryCollector:
         batch.batch["loss_mask"] = loss_mask
         return batch
 
+    def _build_forced_router_batch_output(self, batch_input: DataProto) -> DataProto:
+        """Create a rollout output without running the router model for fixed-route eval."""
+        input_ids = batch_input.batch["input_ids"]
+        attention_mask = batch_input.batch["attention_mask"]
+        batch_size = input_ids.shape[0]
+        response_length = int(self.config.data.max_response_length)
+        pad_id = self.tokenizer.pad_token_id
+        if pad_id is None:
+            pad_id = self.tokenizer.eos_token_id
+        if pad_id is None:
+            pad_id = 0
+
+        responses = torch.full(
+            (batch_size, response_length),
+            int(pad_id),
+            dtype=input_ids.dtype,
+            device=input_ids.device,
+        )
+        response_attention_mask = torch.zeros(
+            (batch_size, response_length),
+            dtype=attention_mask.dtype,
+            device=attention_mask.device,
+        )
+        input_with_response = torch.cat([input_ids, responses], dim=-1)
+        full_attention_mask = torch.cat([attention_mask, response_attention_mask], dim=-1)
+        full_position_ids = compute_position_id_with_mask(full_attention_mask)
+        rollout_log_probs = torch.zeros(
+            (batch_size, response_length),
+            dtype=torch.float32,
+            device=input_ids.device,
+        )
+        return DataProto.from_dict(
+            tensors={
+                "prompts": input_ids,
+                "responses": responses,
+                "input_ids": input_with_response,
+                "rollout_log_probs": rollout_log_probs,
+                "attention_mask": full_attention_mask,
+                "position_ids": full_position_ids,
+            }
+        )
+
 
     def gather_rollout_data(
             self,
@@ -550,25 +592,37 @@ class TrajectoryCollector:
 
             batch_input.meta_info = gen_batch.meta_info
 
-            # pad to be divisible by dp_size
-            batch_input_padded, pad_size = pad_dataproto_to_divisor(batch_input, actor_rollout_wg.world_size)
-            batch_output_padded = actor_rollout_wg.generate_sequences(batch_input_padded)
-            # # unpad
-            
-            batch_output = unpad_dataproto(batch_output_padded, pad_size=pad_size)
+            forced_route_model = self._get_forced_route_model()
+            skip_router_generation = bool(
+                forced_route_model
+                and self.config.get("routing", {}).get("skip_router_generation", False)
+            )
+            if skip_router_generation:
+                batch_output = self._build_forced_router_batch_output(batch_input)
+            else:
+                # pad to be divisible by dp_size
+                batch_input_padded, pad_size = pad_dataproto_to_divisor(batch_input, actor_rollout_wg.world_size)
+                batch_output_padded = actor_rollout_wg.generate_sequences(batch_input_padded)
+                # # unpad
+                
+                batch_output = unpad_dataproto(batch_output_padded, pad_size=pad_size)
 
             batch.non_tensor_batch['uid'] = uid_batch
             batch.non_tensor_batch['traj_uid'] = traj_uid
 
             batch = batch.union(batch_output)
-            route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
+            if skip_router_generation:
+                route_actions_str = [
+                    f"<think>Forced fixed route evaluation.</think><search>{forced_route_model}</search>"
+                ] * len(batch.batch["responses"])
+            else:
+                route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
             # print(f'路由器输出：{route_actions_str}')
             cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success, model_call_elapsed_seconds = self.execute_predictions(
                 route_actions_str, original_obs
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
             model_call_success = np.array(model_call_success, dtype=bool)
-            forced_route_model = self._get_forced_route_model()
             route_actions_for_record = (
                 [
                     f"<think>Forced fixed route evaluation.</think><search>{forced_route_model}</search>"
