@@ -49,7 +49,7 @@ def get_llm_response_via_api(prompt,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                temperature=TAU,
+                temperature=0.4,
                 top_p=TOP_P,
                 seed=SEED,
                 max_tokens=1024
