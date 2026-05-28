@@ -1,4 +1,5 @@
 import time
+import os
 
 import openai
 from tqdm import tqdm
@@ -261,7 +262,8 @@ def access_routing_pool(queries, api_base, api_key):
         task_args.append((q_id, query_text, TAU, LLM_NAME, api_base, api_key))
 
     ret = []
-    with ThreadPool(32) as p:
+    max_concurrency = int(os.environ.get("MAX_CONCURRENCY", "8"))
+    with ThreadPool(max_concurrency) as p:
         for r in tqdm(p.imap_unordered(request_task, task_args), total=len(task_args), desc="Processing", ncols=100):
             ret.append(r)
 

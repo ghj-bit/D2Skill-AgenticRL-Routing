@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
 export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
+export VAL_DATA_SIZE="${VAL_DATA_SIZE:-200}"
+export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
 
 ENGINE="vllm"
 if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then
@@ -16,6 +18,9 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     routing.force_model_enable=True \
     routing.force_model_name="$FIXED_ROUTE_MODEL" \
     routing.skip_router_generation=True \
+    data.val_batch_size="$VAL_DATA_SIZE" \
+    env.seed=-999 \
+    env.use_skills_only_memory=False \
     env.skills_only_memory.enable_dynamic_update=True \
     env.skills_only_memory.update_source=validation \
     env.skills_only_memory.update_save_traj=True \
