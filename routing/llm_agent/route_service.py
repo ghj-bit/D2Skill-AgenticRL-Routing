@@ -10,17 +10,13 @@ _cached_client = None
 from routing.models_config.models_config import MODEL_CONF
 def get_client(
     base_url="",
-    api_key="",
-    max_retries=2,
-    timeout=60
+    api_key=""
 ):
     # global _cached_client
     # if _cached_client is None:
     _cached_client = openai.OpenAI(
         base_url=base_url,
-        api_key=api_key,
-        max_retries=max_retries,
-        timeout=timeout
+        api_key=api_key
     )
     return _cached_client
 
@@ -50,9 +46,9 @@ def get_llm_response_via_api(prompt,
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.4,
-                top_p=TOP_P,
-                seed=SEED,
-                max_tokens=1024
+                n=1,
+                max_tokens=2048,
+                stop=None
             )
             break
         except Exception as e:
