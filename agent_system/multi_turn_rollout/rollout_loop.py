@@ -21,6 +21,7 @@ from verl.utils.model import compute_position_id_with_mask
 import verl.utils.torch_functional as verl_F
 from transformers import PreTrainedTokenizer
 import uuid
+import os
 from agent_system.multi_turn_rollout.utils import process_image, to_list_of_dict, torch_to_numpy, filter_group_data
 from agent_system.environments import EnvironmentManagerBase
 from typing import List, Dict, Any, Optional
@@ -32,6 +33,12 @@ from typing import List, Dict, Any, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 ALFWORLD_TASKS = (
     "pick_and_place",
@@ -562,10 +569,23 @@ class TrajectoryCollector:
             uid = str(uuid.uuid4())
             uid_batch = np.array([uid for _ in range(len(gen_batch.batch))], dtype=object)
         is_done = np.zeros(batch_size, dtype=bool)
-        fixed_eval_style_logging = bool(
+        fixed_eval_style_logging = _as_bool(
             self.config.get("trainer", {}).get("fixed_eval_style_logging", False)
         )
         fixed_eval_success = np.zeros(batch_size, dtype=bool)
+        fixed_eval_log_path = None
+        if fixed_eval_style_logging:
+            fixed_eval_log_dir = self.config.get("trainer", {}).get("default_local_dir", "./outputs")
+            os.makedirs(fixed_eval_log_dir, exist_ok=True)
+            fixed_eval_log_path = os.path.join(fixed_eval_log_dir, "fixed_eval_validation.log")
+
+            def _fixed_eval_log(line: str) -> None:
+                print(line, flush=True)
+                with open(fixed_eval_log_path, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+        else:
+            def _fixed_eval_log(line: str) -> None:
+                return None
         traj_uid = np.array([str(uuid.uuid4()) for _ in range(batch_size)], dtype=object)
         total_batch_list = [[] for _ in range(batch_size)]
         total_infos = [[] for _ in range(batch_size)]
@@ -578,10 +598,9 @@ class TrajectoryCollector:
         # Trajectory collection loop
         for _step in range(self.config.env.max_steps):
             if fixed_eval_style_logging:
-                print(
+                _fixed_eval_log(
                     f"[FixedEval] Step {_step}; Dones ({int(is_done.sum())}/{batch_size}); "
-                    f"SR {float(fixed_eval_success.mean()):.4f}",
-                    flush=True,
+                    f"SR {float(fixed_eval_success.mean()):.4f}"
                 )
             active_masks = np.logical_not(is_done)
 
@@ -709,10 +728,9 @@ class TrajectoryCollector:
             # Break if all environments are done
             if is_done.all():
                 if fixed_eval_style_logging:
-                    print(
+                    _fixed_eval_log(
                         f"[FixedEval] Finished early at step {_step}; "
-                        f"SR {float(fixed_eval_success.mean()):.4f}",
-                        flush=True,
+                        f"SR {float(fixed_eval_success.mean()):.4f}"
                     )
                 break
         

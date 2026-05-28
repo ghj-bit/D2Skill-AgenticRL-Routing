@@ -73,6 +73,12 @@ from routing.models_config.models_config import MODEL_CONF
 WorkerType = Type[Worker]
 
 
+def _as_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 class Role(Enum):
     """
     To create more roles dynamically, you can subclass Role and add new members
@@ -1201,7 +1207,7 @@ class RayPPOTrainer:
         api_costs=None,
     ) -> None:
         """Write compact fixed-model-eval style validation logs when explicitly enabled."""
-        if not self.config.trainer.get("fixed_eval_style_logging", False):
+        if not _as_bool(self.config.trainer.get("fixed_eval_style_logging", False)):
             return
 
         unique_idx = np.asarray(unique_idx, dtype=np.int64)
@@ -1277,17 +1283,22 @@ class RayPPOTrainer:
         with open(result_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
 
-        print(
+        log_path = os.path.join(save_dir, "fixed_eval_validation.log")
+
+        def _fixed_eval_log(line: str) -> None:
+            print(line, flush=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+
+        _fixed_eval_log(
             f"[FixedEval] Validation overall success: {overall_success:.4f}; "
-            f"result file: {result_path}",
-            flush=True,
+            f"result file: {result_path}"
         )
         for task, item in task_rates.items():
-            print(
+            _fixed_eval_log(
                 f"[FixedEval] {task:<35s}: {item['success_rate']:.4f} "
                 f"({item['success']}/{item['total']}) | "
-                f"avg_api_cost={item['avg_api_cost']:.6f}",
-                flush=True,
+                f"avg_api_cost={item['avg_api_cost']:.6f}"
             )
 
     def _write_validation_alfworld_task_success(self, metric_dict: dict) -> None:
