@@ -108,6 +108,7 @@ class TrajectoryCollector:
         self.config = config
         self.tokenizer = tokenizer
         self.processor = processor
+        self._random_trace_dumped = False
 
     def preprocess_single_sample(
         self,
@@ -517,6 +518,7 @@ class TrajectoryCollector:
             gen_batch: DataProto, 
             actor_rollout_wg, 
             envs: EnvironmentManagerBase,
+            is_train: bool = True,
             ) -> DataProto:
         """
         Collects trajectories through parallel agent-environment agent_loop.
@@ -588,9 +590,21 @@ class TrajectoryCollector:
             def _fixed_eval_log(line: str) -> None:
                 return None
         traj_uid = np.array([str(uuid.uuid4()) for _ in range(batch_size)], dtype=object)
-        dump_random_trace = _as_bool(
-            self.config.get("trainer", {}).get("dump_random_trace_json", False)
+        trainer_cfg = self.config.get("trainer", {})
+        dump_random_trace_cfg = trainer_cfg.get("dump_random_trace_json", False)
+        dump_random_trace_mode = (
+            dump_random_trace_cfg.strip().lower()
+            if isinstance(dump_random_trace_cfg, str)
+            else ""
         )
+        dump_random_trace = _as_bool(dump_random_trace_cfg) or dump_random_trace_mode in {
+            "once",
+            "train_once",
+        }
+        if dump_random_trace_mode == "train_once" and not is_train:
+            dump_random_trace = False
+        if dump_random_trace_mode in {"once", "train_once"} and self._random_trace_dumped:
+            dump_random_trace = False
         if dump_random_trace and batch_size > 0:
             trace_start = batch_size // 3
             trace_end = max(trace_start + 1, (batch_size * 2) // 3)
@@ -761,6 +775,7 @@ class TrajectoryCollector:
             trace_path = os.path.join(save_dir, "random_trace.json")
             with open(trace_path, "w", encoding="utf-8") as f:
                 json.dump(trace_payload, f, indent=2, ensure_ascii=False)
+            self._random_trace_dumped = True
             print(f"[TraceDump] Wrote random trajectory trace to {trace_path}", flush=True)
 
         success: Dict[str, np.ndarray] = envs.success_evaluator(
@@ -819,6 +834,7 @@ class TrajectoryCollector:
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
                 envs=envs,
+                is_train=True,
             )
             batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings, wsm_traj, api_costs = filter_group_data(batch_list=batch_list,
                                                                                                 episode_rewards=episode_rewards, 
@@ -893,6 +909,7 @@ class TrajectoryCollector:
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
                 envs=envs,
+                is_train=is_train,
             )
         assert len(total_batch_list) == len(total_episode_rewards)
         assert len(total_batch_list) == len(total_episode_lengths)
