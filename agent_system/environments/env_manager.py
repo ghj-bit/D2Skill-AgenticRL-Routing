@@ -481,7 +481,12 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         if query_texts is None and text_obs and self.tasks:
             query_texts = [f"{self.tasks[i]}\n\nCurrent observation: {text_obs[i]}" for i in range(len(text_obs))]
 
-        full_text_obs, full_route_obs = self.build_text_obs(text_obs, self.envs.get_admissible_commands, models)
+        full_text_obs, full_route_obs = self.build_text_obs(
+            text_obs,
+            self.envs.get_admissible_commands,
+            init=False,
+            models=models,
+        )
         if infos[0].get("extra.gamefile") is None:
             infos = set_gamefile(infos, self.gamefile)
 
@@ -529,10 +534,18 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
             )
         return "\n".join(lines)
 
-    def build_text_obs(self, text_obs: List[str], admissible_actions: List[List[str]], init: bool = False, models: List[str] = []) -> List[str]:
+    def build_text_obs(
+        self,
+        text_obs: List[str],
+        admissible_actions: List[List[str]],
+        *,
+        init: bool = False,
+        models: Optional[List[str]] = None,
+    ) -> List[str]:
         """
         This function builds the text observation for the agent.
         """
+        models = models or []
         postprocess_text_obs = []
         postprocess_route_obs = []
         if not init and self.config.env.history_length > 0:

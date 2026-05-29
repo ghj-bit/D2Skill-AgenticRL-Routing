@@ -26,3 +26,4 @@ core.*
 alfworld.zip
 test_nvidia_api.py
 /agent_system/environments/alfworld_envs.py
+trace.json
