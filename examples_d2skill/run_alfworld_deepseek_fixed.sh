@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
 export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
+export FIXED_EVAL_DUMP_TRACE="${FIXED_EVAL_DUMP_TRACE:-1}"
 export VAL_DATA_SIZE="${VAL_DATA_SIZE:-16}"
 export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
 
@@ -27,6 +28,7 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     env.skills_only_memory.update_save_traj=True \
     trainer.val_only=True \
     +trainer.fixed_eval_style_logging="$FIXED_EVAL_STYLE_LOGGING" \
+    +trainer.dump_random_trace_json="$FIXED_EVAL_DUMP_TRACE" \
     +trainer.write_validation_alfworld_task_success=True \
     trainer.n_gpus_per_node=4 \
     actor_rollout_ref.actor.ppo_mini_batch_size=64 \

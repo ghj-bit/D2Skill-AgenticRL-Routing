@@ -15,6 +15,7 @@
 
 import torch
 import numpy as np
+import json
 from verl import DataProto
 from verl.utils.dataset.rl_dataset import collate_fn
 from verl.utils.model import compute_position_id_with_mask
@@ -587,6 +588,16 @@ class TrajectoryCollector:
             def _fixed_eval_log(line: str) -> None:
                 return None
         traj_uid = np.array([str(uuid.uuid4()) for _ in range(batch_size)], dtype=object)
+        dump_random_trace = _as_bool(
+            self.config.get("trainer", {}).get("dump_random_trace_json", False)
+        )
+        if dump_random_trace and batch_size > 0:
+            trace_start = batch_size // 3
+            trace_end = max(trace_start + 1, (batch_size * 2) // 3)
+            trace_index = int(np.random.randint(trace_start, trace_end))
+        else:
+            trace_index = None
+        trace_steps = []
         total_batch_list = [[] for _ in range(batch_size)]
         total_infos = [[] for _ in range(batch_size)]
         episode_lengths = np.zeros(batch_size, dtype=np.float32)
@@ -659,6 +670,13 @@ class TrajectoryCollector:
                 if forced_route_model
                 else [self._router_action_for_record(action) for action in route_actions_str]
             )
+            if dump_random_trace and trace_index is not None and trace_index < batch_size and active_masks[trace_index]:
+                trace_steps.append({
+                    "router_prompt": route_obs["text"][trace_index] if route_obs.get("text") is not None else None,
+                    "router_output": route_actions_for_record[trace_index] if trace_index < len(route_actions_for_record) else "",
+                    "routed_model_prompt": original_obs["text"][trace_index] if original_obs.get("text") is not None else None,
+                    "routed_model_output": text_model_actions[trace_index] if trace_index < len(text_model_actions) else "",
+                })
             batch.non_tensor_batch['router_actions'] = np.array(
                 route_actions_for_record,
                 dtype=object,
@@ -734,6 +752,17 @@ class TrajectoryCollector:
                     )
                 break
         
+        if dump_random_trace and trace_index is not None:
+            save_dir = self.config.get("trainer", {}).get("default_local_dir", "./outputs")
+            os.makedirs(save_dir, exist_ok=True)
+            trace_payload = {
+                "steps": trace_steps,
+            }
+            trace_path = os.path.join(save_dir, "random_trace.json")
+            with open(trace_path, "w", encoding="utf-8") as f:
+                json.dump(trace_payload, f, indent=2, ensure_ascii=False)
+            print(f"[TraceDump] Wrote random trajectory trace to {trace_path}", flush=True)
+
         success: Dict[str, np.ndarray] = envs.success_evaluator(
                     total_infos=total_infos,
                     total_batch_list=total_batch_list,
