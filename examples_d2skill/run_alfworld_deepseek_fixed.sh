@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-deepseek-v3.2}"
 export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
-export VAL_DATA_SIZE="${VAL_DATA_SIZE:-200}"
+export VAL_DATA_SIZE="${VAL_DATA_SIZE:-16}"
 export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
 
 ENGINE="vllm"
