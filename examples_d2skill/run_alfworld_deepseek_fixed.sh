@@ -22,7 +22,7 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     data.val_batch_size="$VAL_DATA_SIZE" \
     env.seed=0 \
     +env.val_seed=1 \
-    env.use_skills_only_memory=False \
+    env.use_skills_only_memory=True \
     env.skills_only_memory.enable_dynamic_update=True \
     env.skills_only_memory.update_source=validation \
     env.skills_only_memory.update_save_traj=True \

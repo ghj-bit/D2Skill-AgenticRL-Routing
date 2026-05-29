@@ -628,8 +628,9 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                  )
             else:
                 route_action_history = self._build_routing_history(i, valid_lens[i])
-                obs = ALFWORLD_TEMPLATE.format(
+                obs = ALFWORLD_TEMPLATE_WITH_MEMORY.format(
                     task_description=task_description,
+                    retrieved_memories='',
                     step_count=len(self.memory[i]),
                     history_length=valid_lens[i],
                     action_history=memory_contexts[i],

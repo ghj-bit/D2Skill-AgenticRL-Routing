@@ -66,58 +66,44 @@ Now it's your turn to take an action.
 
 # Previous Routing_0421 prompt kept for comparison; the active prompt below is aligned
 # with D:\vscode_project\verl-agent\agent_system\environments\prompts\alfworld.py.
-ALFWORLD_TEMPLATE_ROUTING_0421_PREVIOUS = """
-You are an expert decision-making agent operating in the ALFRED embodied environment.
+# ALFWORLD_TEMPLATE_WITH_MEMORY = """
+# You are an expert decision-making agent operating in the ALFRED embodied environment.
 
-Your goal is to complete the following task:
-{task_description}
-
-
-====================
-## Current Progress
-====================
-
-You have already taken {step_count} step(s).
-
-Recent interaction history (observation éˆ«?action):
-{action_history}
-
-Current step: {current_step}
-
-Current observation:
-{current_observation}
-
-Admissible actions at this step:
-[{admissible_actions}]
+# Your goal is to complete the following task:
+# {task_description}
 
 
-====================
-## Instructions
-====================
+# ====================
+# ## Current Progress
+# ====================
 
-For the current step, you should follow this process:
+# You have already taken {step_count} step(s).
 
-1. Analyze the current observation
-2. Review the retrieved experiences and think about whether any past experience applies
-3. Reason step-by-step and choose the best admissible action
+# Recent interaction history (observation éˆ«?action):
+# {action_history}
 
-Now it's your turn to take an action.
-{output_instruction}
-"""
+# Current step: {current_step}
 
+# Current observation:
+# {current_observation}
 
-ALFWORLD_TEMPLATE = """
-You are an expert agent operating in the ALFRED Embodied Environment. Your task is to: {task_description}
-Prior to this step, you have already taken {step_count} step(s). Below are the most recent {history_length} observations and the corresponding actions you took: {action_history}
-You are now at step {current_step} and your current observation is: {current_observation}
-Your admissible actions of the current situation are: [{admissible_actions}].
-
-Now it's your turn to take an action.
-{output_instruction}
-"""
+# Admissible actions at this step:
+# [{admissible_actions}]
 
 
+# ====================
+# ## Instructions
+# ====================
 
+# For the current step, you should follow this process:
+
+# 1. Analyze the current observation
+# 2. Review the retrieved experiences and think about whether any past experience applies
+# 3. Reason step-by-step and choose the best admissible action
+
+# Now it's your turn to take an action.
+# {output_instruction}
+# """
 
 ALFWORLD_TEMPLATE_WITH_MEMORY = """
 You are an expert decision-making agent operating in the ALFRED embodied environment.
