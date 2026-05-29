@@ -16,6 +16,6 @@ bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
     algorithm.gigpo.step_advantage_w=1.0 \
     algorithm.gigpo.mode="$mode" \
     +trainer.dump_random_trace_json=train_once \
-    trainer.project_name='verl_agent_alfworld_gigpo' \
-    trainer.experiment_name='gigpo_qwen3-4b_skills_d2skill' \
+    trainer.project_name='verl_routing_alfworld_gigpo' \
+    trainer.experiment_name='gigpo_qwen2.5-3b_skills_d2skill' \
     "$@"
