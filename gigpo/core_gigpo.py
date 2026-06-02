@@ -110,7 +110,9 @@ def compute_step_discounted_returns(batch: DataProto, gamma: float, rewards=None
         assert traj_active_masks.all(), "active_masks should be all 1s for the same trajectory"
         base_scores = batch.non_tensor_batch.get('base_episode_rewards', batch.non_tensor_batch.get('episode_rewards', None))
         if base_scores is not None and len(traj_rewards) > 0:
-            traj_rewards[-1] += np.asarray(base_scores, dtype=np.float32)[traj_indices[-1]]
+            base_score = np.asarray(base_scores, dtype=np.float32)[traj_indices[-1]]
+            if base_score <= 0.0:
+                traj_rewards[:] = 0.0
         
         # Calculate returns
         traj_returns = np.zeros_like(traj_rewards)
