@@ -1358,6 +1358,126 @@ class AppWorldEnvironmentManager(EnvironmentManagerBase):
                 postprocess_text_obs.append(obs)
         return postprocess_text_obs
 
+class TextCraftEnvironmentManager(EnvironmentManagerBase):
+    def __init__(self, envs, projection_f, config):
+        self.memory = SimpleMemory()
+        super().__init__(envs, projection_f, config)
+
+    def reset(self, kwargs):
+        text_obs, infos = self.envs.reset(kwargs=kwargs)
+        self.memory.reset(batch_size=len(text_obs))
+        self.tasks = [info.get("goal") or self.extract_task(obs) for obs, info in zip(text_obs, infos)]
+        self.pre_text_obs = text_obs
+
+        full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
+        return {'text': full_text_obs, 'image': None, 'anchor': text_obs}, {'text': route_text_obs, 'image': None, 'anchor': text_obs}, infos
+
+    def step(self, text_actions: List[str], models: List[str] = []):
+        actions, valids = self.projection_f(text_actions)
+        text_obs, rewards, dones, infos = self.envs.step(actions)
+        self.memory.store(
+            {
+                'text_obs': self.pre_text_obs,
+                'result_obs': text_obs,
+                'action': actions,
+                'model': models if models else ['' for _ in range(len(actions))],
+                'routed_model_output': text_actions,
+            }
+        )
+        self.pre_text_obs = text_obs
+
+        full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=False)
+        for i, info in enumerate(infos):
+            info['is_action_valid'] = to_numpy(valids[i])
+            if i < len(self.tasks):
+                info['textcraft_task'] = self.tasks[i]
+
+        query_texts = [
+            f"{self.tasks[i]}\n\nCurrent observation: {text_obs[i]}"
+            for i in range(len(text_obs))
+        ]
+        next_observations = {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts}
+        next_route_observations = {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts}
+        return next_observations, next_route_observations, to_numpy(rewards), to_numpy(dones), infos
+
+    def extract_task(self, text_obs: str) -> str:
+        if "Goal:" in text_obs:
+            return text_obs.split("Goal:", 1)[1].strip()
+        return text_obs.strip().splitlines()[-1] if text_obs else ""
+
+    def _short_preview(self, text: Any, max_len: int = 180) -> str:
+        s = str(text) if text is not None else ""
+        s = " ".join(s.split())
+        return s if len(s) <= max_len else s[: max_len - 3] + "..."
+
+    def _build_routing_history(self, env_idx: int, history_length: int) -> str:
+        if history_length <= 0 or len(self.memory[env_idx]) == 0:
+            return ""
+        recent = self.memory[env_idx][-history_length:]
+        start_idx = len(self.memory[env_idx]) - len(recent)
+        lines = []
+        for j, rec in enumerate(recent):
+            step_num = start_idx + j + 1
+            model_name = rec.get("model", "") or "none"
+            action_preview = self._short_preview(rec.get("routed_model_output", rec.get("action", "")))
+            result_preview = self._short_preview(rec.get("result_obs", rec.get("text_obs", "")))
+            lines.append(
+                f"Step {step_num} [Model: {model_name}]: "
+                f"Executed action: {action_preview} Result: {result_preview}"
+            )
+        return "\n".join(lines)
+
+    def build_text_obs(self, text_obs: List[str], init: bool = False):
+        postprocess_text_obs = []
+        postprocess_route_obs = []
+        if not init and self.config.env.history_length > 0:
+            memory_contexts, valid_lens = self.memory.fetch(
+                self.config.env.history_length,
+                obs_key="text_obs",
+                action_key="action",
+            )
+        else:
+            memory_contexts = [""] * len(text_obs)
+            valid_lens = [0] * len(text_obs)
+
+        for i in range(len(text_obs)):
+            task_description = self.tasks[i] if i < len(self.tasks) else self.extract_task(text_obs[i])
+            if init or self.config.env.history_length <= 0:
+                obs = TEXTCRAFT_TEMPLATE_NO_HIS.format(
+                    current_observation=text_obs[i],
+                    output_instruction=TEXTCRAFT_OUTPUT_INSTRUCTION,
+                )
+                route_history = ""
+                step_count = 0
+                current_step = 1
+            else:
+                obs = TEXTCRAFT_TEMPLATE_WITH_HISTORY.format(
+                    task_description=task_description,
+                    step_count=len(self.memory[i]),
+                    history_length=valid_lens[i],
+                    action_history=memory_contexts[i],
+                    current_step=len(self.memory[i]) + 1,
+                    current_observation=text_obs[i],
+                    output_instruction=TEXTCRAFT_OUTPUT_INSTRUCTION,
+                )
+                route_history = self._build_routing_history(i, valid_lens[i])
+                step_count = len(self.memory[i])
+                current_step = len(self.memory[i]) + 1
+
+            route_obs = ROUTING_PROMPT_TEMPLATE.format(
+                task_description=task_description,
+                retrieved_memories='',
+                step_count=step_count,
+                history_length=valid_lens[i],
+                action_history=route_history,
+                current_step=current_step,
+                current_observation=text_obs[i],
+                candidates_intro=MODELS_INTRODTION,
+            )
+            postprocess_text_obs.append(obs)
+            postprocess_route_obs.append(route_obs)
+        return postprocess_text_obs, postprocess_route_obs
+
 def make_envs(config):
     """
     Create enviroments 
@@ -1463,6 +1583,40 @@ def make_envs(config):
         projection_f = partial(appworld_projection)
         envs = AppWorldEnvironmentManager(_envs, projection_f, config)
         val_envs = AppWorldEnvironmentManager(_val_envs, projection_f, config)
+        val_envs.val_rollout_always_skills = True
+        return envs, val_envs
+    elif "textcraft" in config.env.env_name.lower():
+        try:
+            from agent_system.environments.env_package.textcraft import build_textcraft_envs, textcraft_projection
+        except ModuleNotFoundError:
+            from SkillRL.agent_system.environments.env_package.textcraft import build_textcraft_envs, textcraft_projection
+        env_kwargs = {
+            'env_addr': config.env.textcraft.env_addr,
+            'timeout': config.env.textcraft.get('timeout', 600),
+            'minecraft_dir': config.env.textcraft.get('minecraft_dir', 'agentenv_textcraft/'),
+            'commands': config.env.textcraft.get('commands', None),
+            'goal': config.env.textcraft.get('goal', None),
+            'data_len': config.env.textcraft.get('data_len', 374),
+            'val_offset': config.env.textcraft.get('val_offset', 10000),
+        }
+        _envs = build_textcraft_envs(
+            seed=config.env.seed,
+            env_num=config.data.train_batch_size,
+            group_n=group_n,
+            is_train=True,
+            env_kwargs=env_kwargs,
+            resources_per_worker=resources_per_worker,
+        )
+        _val_envs = build_textcraft_envs(
+            seed=config.env.seed + 1000,
+            env_num=config.data.val_batch_size,
+            group_n=1,
+            is_train=False,
+            env_kwargs=env_kwargs,
+            resources_per_worker=resources_per_worker,
+        )
+        envs = TextCraftEnvironmentManager(_envs, partial(textcraft_projection), config)
+        val_envs = TextCraftEnvironmentManager(_val_envs, partial(textcraft_projection), config)
         val_envs.val_rollout_always_skills = True
         return envs, val_envs
     else:
