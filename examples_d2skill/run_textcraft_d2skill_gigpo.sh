@@ -136,7 +136,7 @@ python3 -m verl.trainer.main_ppo \
   trainer.total_epochs=80 \
   trainer.val_before_train=True \
   trainer.ray_wait_register_center_timeout=3600 \
-  trainer.dump_random_trace_json=train_once \
+  +trainer.dump_random_trace_json=train_once \
   ray_init.num_cpus=80 \
   "$@" \
   2>&1 | tee run_textcraft_gigpo.log
