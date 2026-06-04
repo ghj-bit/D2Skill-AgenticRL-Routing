@@ -9,6 +9,7 @@ export FIXED_EVAL_DUMP_TRACE="${FIXED_EVAL_DUMP_TRACE:-1}"
 export VAL_DATA_SIZE="${VAL_DATA_SIZE:-16}"
 export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
 export FIXED_ALFWORLD_SKILLS_JSON_PATH="${FIXED_ALFWORLD_SKILLS_JSON_PATH:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/D2Skill-AgenticRL-Routing/checkpoints/verl_agent_alfworld_gigpo/gigpo_qwen3-4b_skills_d2skill_0527/updated_skills_train_step140.json}"
+export FIXED_EVAL_EMBEDDING_MODEL_PATH="${FIXED_EVAL_EMBEDDING_MODEL_PATH:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-Embedding-0.6B}"
 RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 LOG_ROOT="${LOG_ROOT:-${SCRIPT_DIR}/fixed_route_3x_logs}"
@@ -56,6 +57,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         --max-concurrency "$MAX_CONCURRENCY" \
         --history-length 2 \
         --eval-dataset eval_in_distribution \
+        --embedding-model-path "$FIXED_EVAL_EMBEDDING_MODEL_PATH" \
         --output-dir "$output_dir" \
         "${SKILL_ARGS[@]}" \
         "${TRACE_ARGS[@]}" \

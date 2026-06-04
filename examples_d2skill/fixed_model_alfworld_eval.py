@@ -150,6 +150,7 @@ def build_env(
     skills_json_path: str | None = None,
     skill_retrieval_service_url: str | None = None,
     retrieval_mode: str = "embedding",
+    embedding_model_path: str | None = None,
     skill_text_for_retrieval: str = "when_to_apply",
     similarity_threshold: float | None = 0.7,
     top_k_task: int = 3,
@@ -181,6 +182,7 @@ def build_env(
                 "skills_only_memory": {
                     "skills_json_path": skills_json_path,
                     "retrieval_mode": retrieval_mode,
+                    "embedding_model_path": embedding_model_path,
                     "skill_retrieval_service_url": skill_retrieval_service_url,
                     "skill_text_for_retrieval": skill_text_for_retrieval,
                     "similarity_threshold": similarity_threshold,
@@ -668,6 +670,10 @@ def parse_args():
     )
     parser.add_argument("--retrieval-mode", default=os.environ.get("FIXED_EVAL_RETRIEVAL_MODE", "embedding"))
     parser.add_argument(
+        "--embedding-model-path",
+        default=os.environ.get("FIXED_EVAL_EMBEDDING_MODEL_PATH"),
+    )
+    parser.add_argument(
         "--skill-text-for-retrieval",
         default=os.environ.get("FIXED_EVAL_SKILL_TEXT_FOR_RETRIEVAL", "when_to_apply"),
     )
@@ -735,6 +741,7 @@ def main():
         skills_json_path=args.skills_json_path,
         skill_retrieval_service_url=args.skill_retrieval_service_url,
         retrieval_mode=args.retrieval_mode,
+        embedding_model_path=args.embedding_model_path,
         skill_text_for_retrieval=args.skill_text_for_retrieval,
         similarity_threshold=args.similarity_threshold,
         top_k_task=args.top_k_task,
