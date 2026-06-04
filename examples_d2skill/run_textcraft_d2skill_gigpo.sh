@@ -38,7 +38,7 @@ export SWANLAB_MODE="${TEXTCRAFT_SWANLAB_MODE:-offline}"
 ENGINE="${1:-vllm}"
 shift 2>/dev/null || true
 
-export VLLM_ATTENTION_BACKEND="${VLLM_ATTENTION_BACKEND:-XFORMERS}"
+export VLLM_ATTENTION_BACKEND="${VLLM_ATTENTION_BACKEND:-FLASH_ATTN}"
 export RAY_worker_register_timeout_seconds="${RAY_worker_register_timeout_seconds:-600}"
 
 TEXTCRAFT_ENV_SERVER_URL="${TEXTCRAFT_ENV_SERVER_URL:-https://nat-notebook-inspire.sii.edu.cn/ws-1177d2a5-aef0-40d3-8777-fed9af13affc/project-b795c114-135a-40db-b3d0-19b60f25237b/user-543feed4-0be2-4972-8987-a324af06c93f/vscode/6372f346-4387-4ba6-86a2-bf8d931df3b4/00e01d55-95b3-40d5-825c-05697643fb2d/proxy/36001}"
@@ -53,7 +53,7 @@ TEXTCRAFT_VAL_JSON="${TEXTCRAFT_VAL_JSON:-/inspire/hdd/project/ai4education/qian
 TEXTCRAFT_PARQUET_DIR="${TEXTCRAFT_PARQUET_DIR:-$HOME/data/verl-agent/textcraft}"
 
 train_data_size="${TRAIN_DATA_SIZE:-32}"
-val_data_size="${VAL_DATA_SIZE:-32}"
+val_data_size="${VAL_DATA_SIZE:-64}"
 group_size="${GROUP_SIZE:-8}"
 max_steps="${TEXTCRAFT_MAX_STEPS:-30}"
 
