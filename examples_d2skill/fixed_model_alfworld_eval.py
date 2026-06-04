@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import os
+import random
 import statistics
 import sys
 import time
@@ -296,6 +297,7 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
     test_dir = os.path.join(output_dir, f"test_{test_idx:03d}")
     os.makedirs(test_dir, exist_ok=True)
     result_fp = os.path.join(test_dir, "result.json")
+    step_log_fp = os.path.join(test_dir, "step_success_log.jsonl")
 
     logging.info("========== Start test %s ==========", test_idx)
     start_time = time.time()
@@ -311,6 +313,31 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
     trajectories = {str(i): [] for i in range(args.env_num)} if args.record_trajectories else None
     latest_infos = infos
 
+    def write_step_log(step_idx: int, phase: str):
+        finished = int(np.array(env_dones).sum().item())
+        successes = int(overall_success.sum().item())
+        payload = {
+            "test_idx": test_idx,
+            "step": step_idx,
+            "phase": phase,
+            "finished_envs": finished,
+            "successes": successes,
+            "total_envs": args.env_num,
+            "success_rate": float(overall_success.mean().item()),
+        }
+        with open(step_log_fp, "a", encoding="utf-8") as step_f:
+            step_f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        logging.info(
+            "[StepSuccess] test=%s step=%s phase=%s finished=%s/%s successes=%s sr=%.4f",
+            test_idx,
+            step_idx,
+            phase,
+            finished,
+            args.env_num,
+            successes,
+            payload["success_rate"],
+        )
+
     for step_idx in range(args.max_steps):
         done_count = int(np.array(env_dones).sum().item())
         current_sr = float(overall_success.mean().item())
@@ -322,6 +349,7 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
             args.env_num,
             current_sr,
         )
+        write_step_log(step_idx, "before_step")
 
         actions, step_token_usages = infer_actions_concurrently(
             agent=agent,
@@ -377,6 +405,8 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
                     "token_usage": env_token_usage[i],
                 }
 
+        write_step_log(step_idx, "after_step")
+
         if all(env_dones):
             logging.info("Test %s finished early at step %s", test_idx, step_idx)
             break
@@ -430,6 +460,7 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
         "token_usage": total_token_usage,
         "elapsed_seconds": elapsed,
         "per_env_results": per_env_results,
+        "step_success_log_file": step_log_fp,
     }
 
     if trajectories is not None:
@@ -445,6 +476,22 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
                 traj_f.write(json.dumps(record, ensure_ascii=False) + "\n")
         result["trajectories_file"] = trajectories_fp
 
+        candidate_envs = [env_idx for env_idx, steps in trajectories.items() if steps]
+        if candidate_envs:
+            rng = random.Random(int(args.seed) + int(test_idx))
+            env_idx = rng.choice(candidate_envs)
+            random_trajectory_fp = os.path.join(test_dir, "random_trajectory.json")
+            random_trajectory = {
+                "test_idx": test_idx,
+                "env_idx": int(env_idx),
+                "result": per_env_results.get(env_idx),
+                "trajectory": trajectories[env_idx],
+            }
+            with open(random_trajectory_fp, "w", encoding="utf-8") as random_f:
+                json.dump(random_trajectory, random_f, ensure_ascii=False, indent=2)
+            result["random_trajectory_file"] = random_trajectory_fp
+            logging.info("Random trajectory file: %s", random_trajectory_fp)
+
     with open(result_fp, "w", encoding="utf-8") as result_f:
         json.dump(result, result_f, ensure_ascii=False, indent=2)
 
@@ -455,6 +502,16 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
         elapsed,
         result_fp,
     )
+    logging.info("[TaskSuccess] test=%s overall success_rate=%.4f total=%s", test_idx, result["overall_success_rate"], args.env_num)
+    for task, metrics in sorted(task_rates.items()):
+        logging.info(
+            "[TaskSuccess] test=%s task=%s success_rate=%.4f success=%s total=%s",
+            test_idx,
+            task,
+            metrics["success_rate"],
+            metrics["success"],
+            metrics["total"],
+        )
     return result
 
 
