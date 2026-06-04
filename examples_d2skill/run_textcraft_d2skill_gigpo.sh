@@ -62,6 +62,8 @@ cost_reward_weight="${COST_REWARD_WEIGHT:-1.0}"
 step_cost_reward_weight="${STEP_COST_REWARD_WEIGHT:-1.0}"
 
 ACTOR_MODEL_PATH="${ACTOR_MODEL_PATH:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen2.5-3B-Instruct}"
+TEXTCRAFT_ROUTING_API_BASE="${TEXTCRAFT_ROUTING_API_BASE:-}"
+TEXTCRAFT_ROUTING_API_KEY="${TEXTCRAFT_ROUTING_API_KEY:-empty}"
 mode="${GIGPO_MODE:-mean_norm}"
 
 if [[ -f "$TEXTCRAFT_PARQUET_DIR/train.parquet" && -f "$TEXTCRAFT_PARQUET_DIR/test.parquet" ]]; then
@@ -138,5 +140,7 @@ python3 -m verl.trainer.main_ppo \
   trainer.ray_wait_register_center_timeout=3600 \
   +trainer.dump_random_trace_json=train_once \
   ray_init.num_cpus=80 \
+  +api_base="$TEXTCRAFT_ROUTING_API_BASE" \
+  +api_key="$TEXTCRAFT_ROUTING_API_KEY" \
   "$@" \
   2>&1 | tee run_textcraft_gigpo.log
