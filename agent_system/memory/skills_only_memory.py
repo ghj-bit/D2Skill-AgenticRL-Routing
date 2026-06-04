@@ -73,7 +73,6 @@ class SkillsOnlyMemory(BaseMemory):
         skill_retrieval_service_url: Optional[Union[str, List[str]]] = None,
         num_gpus: int = 1,
         skill_text_for_retrieval: str = "full",
-        load_initial_skills: bool = True,
         similarity_threshold: Optional[float] = None,
         skill_retrieval_timeout: int = 60,
         retrieval_top_2k: Optional[int] = None,
@@ -83,14 +82,13 @@ class SkillsOnlyMemory(BaseMemory):
     ):
         """
         Args:
-            skills_json_path:     Path to Claude-style skills JSON file. Can be None when load_initial_skills=False.
+            skills_json_path:     Path to Claude-style skills JSON file. Empty or None starts with an empty skill bank.
             skill_retrieval_timeout: Timeout in seconds for remote retrieval HTTP requests (default 60).
             retrieval_mode:       ``"template"`` or ``"embedding"``.
             skill_text_for_retrieval: Which skill fields to use as document input.
                                   ``"full"`` = title + principle + when_to_apply (default);
                                   ``"when_to_apply"`` = only when_to_apply;
                                   ``"principle"`` = only principle.
-            load_initial_skills:  If False, do not load from skills_json_path; start with empty skill bank.
             similarity_threshold: If set (embedding mode), only return skills with similarity >= this value.
             embedding_model_path: Local path (or HF model ID) for the
                                   SentenceTransformer embedding model.  Only
@@ -126,8 +124,8 @@ class SkillsOnlyMemory(BaseMemory):
                 f"retrieval_mode must be 'template' or 'embedding', got '{retrieval_mode}'"
             )
 
-        if load_initial_skills:
-            if not skills_json_path or not os.path.exists(skills_json_path):
+        if skills_json_path and str(skills_json_path).strip() and str(skills_json_path).strip().lower() != "none":
+            if not os.path.exists(skills_json_path):
                 raise FileNotFoundError(f"Skills file not found: {skills_json_path}")
             with open(skills_json_path, 'r') as f:
                 loaded = json.load(f)
@@ -163,7 +161,6 @@ class SkillsOnlyMemory(BaseMemory):
                 f"skill_text_for_retrieval must be 'full', 'when_to_apply', or 'principle', got '{skill_text_for_retrieval}'"
             )
         self._skill_text_for_retrieval = skill_text_for_retrieval
-        self.load_initial_skills = load_initial_skills
         self.similarity_threshold = similarity_threshold
         self._retrieval_timeout = max(60, int(skill_retrieval_timeout))
         self._retrieval_top_2k = retrieval_top_2k

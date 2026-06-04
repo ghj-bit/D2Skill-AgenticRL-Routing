@@ -647,11 +647,8 @@ class TrajectoryCollector:
             batch_input.meta_info = gen_batch.meta_info
 
             forced_route_model = self._get_forced_route_model()
-            skip_router_generation = bool(
-                forced_route_model
-                and self.config.get("routing", {}).get("skip_router_generation", False)
-            )
-            if skip_router_generation:
+            force_model_enabled = bool(forced_route_model)
+            if force_model_enabled:
                 batch_output = self._build_forced_router_batch_output(batch_input)
             else:
                 # pad to be divisible by dp_size
@@ -665,7 +662,7 @@ class TrajectoryCollector:
             batch.non_tensor_batch['traj_uid'] = traj_uid
 
             batch = batch.union(batch_output)
-            if skip_router_generation:
+            if force_model_enabled:
                 route_actions_str = [
                     f"<think>Forced fixed route evaluation.</think><search>{forced_route_model}</search>"
                 ] * len(batch.batch["responses"])

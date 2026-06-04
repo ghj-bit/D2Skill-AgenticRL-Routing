@@ -83,12 +83,8 @@ class SearchEnvironmentManager(EnvironmentManagerBase):
         if config.env.get('use_skills_only_memory', False):
             from agent_system.memory import SkillsOnlyMemory
             som_cfg = config.env.skills_only_memory
-            load_initial = som_cfg.get('load_initial_skills', True)
             skills_path = som_cfg.get('skills_json_path')
-            if not skills_path or (isinstance(skills_path, str) and not skills_path.strip()):
-                load_initial = False
-                skills_path = None
-            elif not load_initial:
+            if not skills_path or (isinstance(skills_path, str) and (not skills_path.strip() or skills_path.strip().lower() == "none")):
                 skills_path = None
             _mgr = (som_cfg.get("management") or {}) if som_cfg.get("enable_dynamic_management", False) else {}
             self.retrieval_memory = SkillsOnlyMemory(
@@ -99,7 +95,6 @@ class SearchEnvironmentManager(EnvironmentManagerBase):
                 device=som_cfg.get('device', None),
                 skill_retrieval_service_url=som_cfg.get('skill_retrieval_service_url', None),
                 skill_text_for_retrieval=som_cfg.get('skill_text_for_retrieval', 'full'),
-                load_initial_skills=load_initial,
                 similarity_threshold=som_cfg.get('similarity_threshold'),
                 skill_retrieval_timeout=som_cfg.get('skill_retrieval_timeout', 60),
                 retrieval_top_2k=_mgr.get('retrieval_top_2k'),
@@ -313,12 +308,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         if config.env.get('use_skills_only_memory', False):
             from agent_system.memory import SkillsOnlyMemory
             som_cfg = config.env.skills_only_memory
-            load_initial = som_cfg.get('load_initial_skills', True)
             skills_path = som_cfg.get('skills_json_path')
-            if not skills_path or (isinstance(skills_path, str) and not skills_path.strip()):
-                load_initial = False
-                skills_path = None
-            elif not load_initial:
+            if not skills_path or (isinstance(skills_path, str) and (not skills_path.strip() or skills_path.strip().lower() == "none")):
                 skills_path = None
             _mgr = (som_cfg.get("management") or {}) if som_cfg.get("enable_dynamic_management", False) else {}
             self.retrieval_memory = SkillsOnlyMemory(
@@ -329,7 +320,6 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 device=som_cfg.get('device', None),
                 skill_retrieval_service_url=som_cfg.get('skill_retrieval_service_url', None),
                 skill_text_for_retrieval=som_cfg.get('skill_text_for_retrieval', 'full'),
-                load_initial_skills=load_initial,
                 similarity_threshold=som_cfg.get('similarity_threshold'),
                 skill_retrieval_timeout=som_cfg.get('skill_retrieval_timeout', 60),
                 retrieval_top_2k=_mgr.get('retrieval_top_2k'),
@@ -726,12 +716,8 @@ class SokobanEnvironmentManager(EnvironmentManagerBase):
         if config.env.get('use_skills_only_memory', False):
             from agent_system.memory import SkillsOnlyMemory
             som_cfg = config.env.skills_only_memory
-            load_initial = som_cfg.get('load_initial_skills', True)
             skills_path = som_cfg.get('skills_json_path')
-            if not skills_path or (isinstance(skills_path, str) and not skills_path.strip()):
-                load_initial = False
-                skills_path = None
-            elif not load_initial:
+            if not skills_path or (isinstance(skills_path, str) and (not skills_path.strip() or skills_path.strip().lower() == "none")):
                 skills_path = None
             _mgr = (som_cfg.get("management") or {}) if som_cfg.get("enable_dynamic_management", False) else {}
             self.retrieval_memory = SkillsOnlyMemory(
@@ -742,7 +728,6 @@ class SokobanEnvironmentManager(EnvironmentManagerBase):
                 device=som_cfg.get('device', None),
                 skill_retrieval_service_url=som_cfg.get('skill_retrieval_service_url', None),
                 skill_text_for_retrieval=som_cfg.get('skill_text_for_retrieval', 'full'),
-                load_initial_skills=load_initial,
                 similarity_threshold=som_cfg.get('similarity_threshold'),
                 skill_retrieval_timeout=som_cfg.get('skill_retrieval_timeout', 60),
                 retrieval_top_2k=_mgr.get('retrieval_top_2k'),
@@ -1013,12 +998,8 @@ class WebshopEnvironmentManager(EnvironmentManagerBase):
         if config.env.get('use_skills_only_memory', False):
             from agent_system.memory import SkillsOnlyMemory
             som_cfg = config.env.skills_only_memory
-            load_initial = som_cfg.get('load_initial_skills', True)
             skills_path = som_cfg.get('skills_json_path')
-            if not skills_path or (isinstance(skills_path, str) and not skills_path.strip()):
-                load_initial = False
-                skills_path = None
-            elif not load_initial:
+            if not skills_path or (isinstance(skills_path, str) and (not skills_path.strip() or skills_path.strip().lower() == "none")):
                 skills_path = None
             _mgr = (som_cfg.get("management") or {}) if som_cfg.get("enable_dynamic_management", False) else {}
             self.retrieval_memory = SkillsOnlyMemory(
@@ -1029,7 +1010,6 @@ class WebshopEnvironmentManager(EnvironmentManagerBase):
                 device=som_cfg.get('device', None),
                 skill_retrieval_service_url=som_cfg.get('skill_retrieval_service_url', None),
                 skill_text_for_retrieval=som_cfg.get('skill_text_for_retrieval', 'full'),
-                load_initial_skills=load_initial,
                 similarity_threshold=som_cfg.get('similarity_threshold'),
                 skill_retrieval_timeout=som_cfg.get('skill_retrieval_timeout', 60),
                 retrieval_top_2k=_mgr.get('retrieval_top_2k'),

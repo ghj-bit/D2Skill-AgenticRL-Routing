@@ -18,18 +18,13 @@ EMBEDDING_MODEL="${EMBEDDING_MODEL:-/inspire/hdd/project/ai4education/qianhong-p
 # EMBEDDING_MODEL="${EMBEDDING_MODEL:-/data/group/project3/project3_cluster3_data/hf_models/Qwen3-Embedding-4B}"
 PORT="${PORT:-8003}"
 
-# Set NO_LOAD_INITIAL_SKILLS=1 to start with empty skill bank (skills loaded later via /reload_skills)
-LOAD_INITIAL_SKILLS="${NO_LOAD_INITIAL_SKILLS:-0}"
-
 ARGS=(
   --device cuda
   --port "$PORT"
   --num_gpus "$NUM_GPUS"
   --embedding_model_path "$EMBEDDING_MODEL"
 )
-if [[ "$LOAD_INITIAL_SKILLS" == "0" ]]; then
-  ARGS+=(--no_load_initial_skills)
-else
+if [[ -n "$SKILLS_JSON" && "$SKILLS_JSON" != "None" ]]; then
   ARGS+=(--skills_json_path "$SKILLS_JSON")
 fi
 

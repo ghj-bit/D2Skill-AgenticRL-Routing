@@ -123,12 +123,7 @@ def main():
         "--skills_json_path",
         type=str,
         default=None,
-        help="Path to Claude-style skills JSON. Optional when --no_load_initial_skills.",
-    )
-    parser.add_argument(
-        "--no_load_initial_skills",
-        action="store_true",
-        help="Start with empty skill bank (do not load from skills_json_path). Skills can be loaded via /reload_skills.",
+        help="Path to Claude-style skills JSON. Empty or omitted starts with an empty skill bank.",
     )
     parser.add_argument(
         "--embedding_model_path",
@@ -151,24 +146,20 @@ def main():
     parser.add_argument("--port", type=int, default=8002, help="Port for the HTTP server.")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Bind host.")
     args = parser.parse_args()
-    load_initial = not getattr(args, "no_load_initial_skills", False)
-    if load_initial and not args.skills_json_path:
-        parser.error("--skills_json_path is required unless --no_load_initial_skills is set.")
 
     from agent_system.memory import SkillsOnlyMemory
 
     _skill_memory = SkillsOnlyMemory(
-        skills_json_path=args.skills_json_path if load_initial else None,
+        skills_json_path=args.skills_json_path,
         retrieval_mode="embedding",
         embedding_model_path=args.embedding_model_path,
         device=args.device,
         num_gpus=args.num_gpus,
         skill_text_for_retrieval="full",  # overridden per request by client when sent
-        load_initial_skills=load_initial,
     )
     # When starting with empty skill bank, warm up the embedding model so the first
     # retrieve after /reload_skills does not block on model load (avoids client timeout).
-    if not load_initial:
+    if not args.skills_json_path:
         print("[SkillRetrievalServer] Warming up embedding model (empty skill bank)...")
         _skill_memory._get_embedding_model()
         print("[SkillRetrievalServer] Embedding model ready.")
