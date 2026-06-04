@@ -1566,10 +1566,7 @@ def make_envs(config):
         val_envs.val_rollout_always_skills = True
         return envs, val_envs
     elif "textcraft" in config.env.env_name.lower():
-        try:
-            from agent_system.environments.env_package.textcraft import build_textcraft_envs, textcraft_projection
-        except ModuleNotFoundError:
-            from SkillRL.agent_system.environments.env_package.textcraft import build_textcraft_envs, textcraft_projection
+        from agent_system.environments.env_package.textcraft import build_textcraft_envs, textcraft_projection
         env_kwargs = {
             'env_addr': config.env.textcraft.env_addr,
             'timeout': config.env.textcraft.get('timeout', 600),
