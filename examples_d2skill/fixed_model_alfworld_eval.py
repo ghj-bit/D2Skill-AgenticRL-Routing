@@ -27,7 +27,7 @@ SKILLRL_ROOT = PROJECT_ROOT / "SkillRL"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 if SKILLRL_ROOT.exists() and str(SKILLRL_ROOT) not in sys.path:
-    sys.path.insert(0, str(SKILLRL_ROOT))
+    sys.path.append(str(SKILLRL_ROOT))
 
 from routing.models_config.models_config import MODEL_CONF  # noqa: E402
 
@@ -143,7 +143,8 @@ def build_env(
     env_name: str,
     env_num: int = 1,
     seed: int = 1,
-    history_length: int = 3,
+    max_steps: int = 50,
+    history_length: int = 2,
     eval_dataset: str = "eval_in_distribution",
     use_skills_only_memory: bool = True,
     skills_json_path: str | None = None,
@@ -171,9 +172,9 @@ def build_env(
                 "env_name": "alfworld/AlfredTWEnv",
                 "seed": 0,
                 "val_seed": seed,
-                "max_steps": 50,
+                "max_steps": max_steps,
                 "rollout": {"n": 1},
-                "resources_per_worker": {"num_cpus": 0.05, "num_gpus": 0.0},
+                "resources_per_worker": {"num_cpus": 0.1, "num_gpus": 0.0},
                 "alfworld": {"eval_dataset": eval_dataset},
                 "history_length": history_length,
                 "use_skills_only_memory": use_skills_only_memory,
@@ -650,7 +651,7 @@ def parse_args():
     parser.add_argument("--test-times", type=int, default=int(os.environ.get("FIXED_EVAL_TEST_TIMES", 3)))
     parser.add_argument("--env-name", default=os.environ.get("FIXED_EVAL_ENV_NAME", "alfworld"))
     parser.add_argument("--eval-dataset", default=os.environ.get("FIXED_EVAL_DATASET", "eval_in_distribution"))
-    parser.add_argument("--history-length", type=int, default=int(os.environ.get("FIXED_EVAL_HISTORY_LENGTH", 3)))
+    parser.add_argument("--history-length", type=int, default=int(os.environ.get("FIXED_EVAL_HISTORY_LENGTH", 2)))
     parser.add_argument("--seed", type=int, default=int(os.environ.get("FIXED_EVAL_SEED", 1)))
     parser.add_argument(
         "--skills-json-path",
@@ -727,6 +728,7 @@ def main():
         env_name=args.env_name,
         env_num=args.env_num,
         seed=args.seed,
+        max_steps=args.max_steps,
         history_length=args.history_length,
         eval_dataset=args.eval_dataset,
         use_skills_only_memory=not args.disable_skills,

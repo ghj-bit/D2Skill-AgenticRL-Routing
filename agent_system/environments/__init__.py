@@ -13,4 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
+_skillrl_env_path = Path(__file__).resolve().parents[2] / "SkillRL" / "agent_system" / "environments"
+if _skillrl_env_path.exists():
+    __path__.append(str(_skillrl_env_path))
+
 from agent_system.environments.env_manager import EnvironmentManagerBase, make_envs

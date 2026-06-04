@@ -38,7 +38,7 @@ mkdir -p "$MODEL_LOG_DIR"
 
 for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     seed=$((BASE_SEED + run_idx))
-    eval_seed=$((seed + 1))
+    eval_seed=$((seed + 1000))
     log_path="${MODEL_LOG_DIR}/seed_${seed}.log"
     output_dir="${MODEL_LOG_DIR}/seed_${seed}"
     TRACE_ARGS=()
@@ -54,7 +54,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         --test-times 1 \
         --max-steps 50 \
         --max-concurrency "$MAX_CONCURRENCY" \
-        --history-length 3 \
+        --history-length 2 \
         --eval-dataset eval_in_distribution \
         --output-dir "$output_dir" \
         "${SKILL_ARGS[@]}" \
