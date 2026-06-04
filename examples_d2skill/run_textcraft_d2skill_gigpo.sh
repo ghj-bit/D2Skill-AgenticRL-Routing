@@ -52,7 +52,7 @@ TEXTCRAFT_TRAIN_JSON="${TEXTCRAFT_TRAIN_JSON:-/inspire/hdd/project/ai4education/
 TEXTCRAFT_VAL_JSON="${TEXTCRAFT_VAL_JSON:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym-RL-Data-ID/eval/textcraft_test.json}"
 TEXTCRAFT_PARQUET_DIR="${TEXTCRAFT_PARQUET_DIR:-$HOME/data/verl-agent/textcraft}"
 
-train_data_size="${TRAIN_DATA_SIZE:-32}"
+train_data_size="${TRAIN_DATA_SIZE:-16}"
 val_data_size="${VAL_DATA_SIZE:-64}"
 group_size="${GROUP_SIZE:-8}"
 max_steps="${TEXTCRAFT_MAX_STEPS:-30}"
