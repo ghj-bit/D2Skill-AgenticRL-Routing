@@ -24,12 +24,12 @@ fi
 SKILL_ARGS=()
 if [[ -n "${FIXED_ALFWORLD_SKILLS_JSON_PATH}" ]]; then
     SKILL_ARGS+=(
-        env.skills_only_memory.skills_json_path="$FIXED_ALFWORLD_SKILLS_JSON_PATH"
+        --skills-json-path "$FIXED_ALFWORLD_SKILLS_JSON_PATH"
     )
     echo "Loading AlfWorld skills from: ${FIXED_ALFWORLD_SKILLS_JSON_PATH}"
 else
     SKILL_ARGS+=(
-        env.skills_only_memory.skills_json_path=None
+        --skills-json-path None
     )
     echo "No initial AlfWorld skills path configured; starting with empty skills."
 fi
@@ -38,39 +38,31 @@ mkdir -p "$MODEL_LOG_DIR"
 
 for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     seed=$((BASE_SEED + run_idx))
+    eval_seed=$((seed + 1))
     log_path="${MODEL_LOG_DIR}/seed_${seed}.log"
-    experiment_name="fixed_${FIXED_ROUTE_MODEL}_seed${seed}"
+    output_dir="${MODEL_LOG_DIR}/seed_${seed}"
+    TRACE_ARGS=()
+    if [[ "$FIXED_EVAL_DUMP_TRACE" == "1" || "$FIXED_EVAL_DUMP_TRACE" == "true" || "$FIXED_EVAL_DUMP_TRACE" == "True" ]]; then
+        TRACE_ARGS+=(--record-trajectories)
+    fi
 
     echo "[FixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} log=${log_path}"
-    bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
-        routing.force_model_enable=True \
-        routing.force_model_name="$FIXED_ROUTE_MODEL" \
-        data.val_batch_size="$VAL_DATA_SIZE" \
-        env.seed="$seed" \
-        +env.val_seed="$((seed + 1))" \
-        env.use_skills_only_memory=True \
-        env.skills_only_memory.enable_dynamic_update=True \
-        env.skills_only_memory.update_source=validation \
-        env.skills_only_memory.update_save_traj=True \
+    python3 "${SCRIPT_DIR}/fixed_model_alfworld_eval.py" \
+        --model "$FIXED_ROUTE_MODEL" \
+        --env-num "$VAL_DATA_SIZE" \
+        --seed "$eval_seed" \
+        --test-times 1 \
+        --max-steps 50 \
+        --max-concurrency "$MAX_CONCURRENCY" \
+        --history-length 3 \
+        --eval-dataset eval_in_distribution \
+        --output-dir "$output_dir" \
         "${SKILL_ARGS[@]}" \
-        trainer.val_only=True \
-        +trainer.fixed_eval_style_logging="$FIXED_EVAL_STYLE_LOGGING" \
-        +trainer.dump_random_trace_json="$FIXED_EVAL_DUMP_TRACE" \
-        +trainer.write_validation_alfworld_task_success=True \
-        trainer.n_gpus_per_node=4 \
-        actor_rollout_ref.actor.ppo_mini_batch_size=64 \
-        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
-        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
-        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
-        actor_rollout_ref.rollout.max_num_seqs=256 \
-        ray_init.num_cpus=40 \
-        trainer.project_name='verl_agent_alfworld_fixed_route' \
-        trainer.experiment_name="$experiment_name" \
+        "${TRACE_ARGS[@]}" \
         "$@" \
         2>&1 | tee "$log_path"
 done
 
-python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT" \
-    --json-out "$SUMMARY_JSON" \
-    --wandb-name "fixed_${FIXED_ROUTE_MODEL}_3x_summary" \
-    --no-wandb
+python3 "${SCRIPT_DIR}/fixed_model_alfworld_eval.py" \
+    --aggregate-root "$MODEL_LOG_DIR" \
+    --json-out "$SUMMARY_JSON"

@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import os
+import statistics
 import sys
 import time
 from collections import defaultdict
@@ -54,14 +55,6 @@ API_PRICE_1M_TOKENS = {
         "output": 0.378,
     },
 }
-
-
-class AttrDict(dict):
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError as exc:
-            raise AttributeError(name) from exc
 
 
 def empty_token_usage() -> dict:
@@ -150,45 +143,58 @@ def build_env(
     env_name: str,
     env_num: int = 1,
     seed: int = 1,
-    history_length: int = 2,
+    history_length: int = 3,
     eval_dataset: str = "eval_in_distribution",
+    use_skills_only_memory: bool = True,
+    skills_json_path: str | None = None,
+    skill_retrieval_service_url: str | None = None,
+    retrieval_mode: str = "embedding",
+    skill_text_for_retrieval: str = "when_to_apply",
+    similarity_threshold: float | None = 0.7,
+    top_k_task: int = 3,
+    top_k_step: int = 3,
+    skill_gen_mode: str = "task_step",
 ):
-    group_n = 1
     if env_name != "alfworld":
         raise ValueError(f"Unsupported environment name: {env_name}")
 
-    from agent_system.environments.env_manager import AlfWorldEnvironmentManager
-    from agent_system.environments.env_package.alfworld import alfworld_projection
-    from agent_system.environments.env_package.alfworld import build_alfworld_envs
+    from omegaconf import OmegaConf
+    from agent_system.environments.env_manager import make_envs
 
-    alf_config_path = SKILLRL_ROOT / "agent_system" / "environments" / "env_package" / "alfworld" / "configs" / "config_tw.yaml"
-    if not alf_config_path.exists():
-        alf_config_path = PROJECT_ROOT / "agent_system" / "environments" / "env_package" / "alfworld" / "configs" / "config_tw.yaml"
-
-    env_kwargs = {
-        "eval_dataset": eval_dataset,
-    }
-    resources_per_worker = {"num_cpus": 0.05, "num_gpus": 0.0}
-    envs = build_alfworld_envs(
-        str(alf_config_path),
-        seed=seed,
-        env_num=env_num,
-        group_n=group_n,
-        is_train=False,
-        env_kwargs=env_kwargs,
-        resources_per_worker=resources_per_worker,
-    )
-    config = AttrDict(
+    config = OmegaConf.create(
         {
-            "env": AttrDict(
-                {
-                    "env_name": "alfworld/AlfredTWEnv",
-                    "history_length": history_length,
-                }
-            )
+            "data": {
+                "train_batch_size": 1,
+                "val_batch_size": env_num,
+            },
+            "env": {
+                "env_name": "alfworld/AlfredTWEnv",
+                "seed": 0,
+                "val_seed": seed,
+                "max_steps": 50,
+                "rollout": {"n": 1},
+                "resources_per_worker": {"num_cpus": 0.05, "num_gpus": 0.0},
+                "alfworld": {"eval_dataset": eval_dataset},
+                "history_length": history_length,
+                "use_skills_only_memory": use_skills_only_memory,
+                "skills_only_memory": {
+                    "skills_json_path": skills_json_path,
+                    "retrieval_mode": retrieval_mode,
+                    "skill_retrieval_service_url": skill_retrieval_service_url,
+                    "skill_text_for_retrieval": skill_text_for_retrieval,
+                    "similarity_threshold": similarity_threshold,
+                    "top_k_task": top_k_task,
+                    "top_k_step": top_k_step,
+                    "skill_gen_mode": skill_gen_mode,
+                    "enable_dynamic_management": False,
+                },
+            },
         }
     )
-    return AlfWorldEnvironmentManager(envs, alfworld_projection, config)
+    train_envs, val_envs = make_envs(config)
+    if hasattr(train_envs, "envs") and hasattr(train_envs.envs, "close"):
+        train_envs.envs.close()
+    return val_envs
 
 
 class Agent:
@@ -291,7 +297,7 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
     logging.info("========== Start test %s ==========", test_idx)
     start_time = time.time()
 
-    obs, infos = env_manager.reset({})
+    obs, _route_obs, infos = env_manager.reset({})
     env_dones = [False] * args.env_num
     overall_success = np.zeros(args.env_num, dtype=bool)
     task_success_cnt = defaultdict(int)
@@ -325,7 +331,10 @@ def run_one_test(test_idx: int, env_manager, agent: Agent, args, output_dir: str
                 add_token_usage(env_token_usage[i], usage)
 
         obs_anchor = obs.get("anchor")
-        obs, rewards, dones, infos = env_manager.step(actions)
+        obs, _route_obs, rewards, dones, infos = env_manager.step(
+            actions,
+            models=[agent.model_name] * len(actions),
+        )
         latest_infos = infos
 
         for i in range(args.env_num):
@@ -542,8 +551,68 @@ def write_final_summary(results, output_dir: str, model_name: str, log_file: str
     logging.info("Final summary file: %s", summary_fp)
 
 
+def _summarize_values(values: list[float]) -> dict:
+    return {
+        "mean": statistics.fmean(values),
+        "std": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "count": len(values),
+        "min": min(values),
+        "max": max(values),
+        "median": statistics.median(values),
+        "values": values,
+    }
+
+
+def aggregate_final_summaries(aggregate_root: Path, json_out: Path) -> dict:
+    summaries = []
+    for path in sorted(aggregate_root.glob("seed_*/final_summary.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            summaries.append({"path": str(path), "error": str(exc), "_invalid": True})
+            continue
+        payload["_path"] = str(path)
+        summaries.append(payload)
+
+    valid = [s for s in summaries if not s.get("_invalid")]
+    model_name = valid[0].get("model", aggregate_root.name) if valid else aggregate_root.name
+    overall_values = [float(s.get("overall_success_avg", 0.0)) for s in valid]
+
+    task_values = defaultdict(list)
+    task_totals = defaultdict(int)
+    for summary in valid:
+        for task, metrics in (summary.get("task_summary") or {}).items():
+            task_values[task].append(float(metrics.get("success_avg", 0.0)))
+            task_totals[task] += int(metrics.get("total", 0))
+
+    result = {
+        model_name: {
+            "num_runs": len(valid),
+            "runs": [s.get("_path") for s in valid],
+            "overall_success_rate": _summarize_values(overall_values) if overall_values else None,
+            "alfworld_tasks": {
+                task: {
+                    "success_rate": _summarize_values(values),
+                    "total": task_totals[task],
+                }
+                for task, values in sorted(task_values.items())
+            },
+        }
+    }
+    invalid = [s for s in summaries if s.get("_invalid")]
+    if invalid:
+        result["_skipped"] = invalid
+
+    json_out.parent.mkdir(parents=True, exist_ok=True)
+    json_out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Wrote {json_out}")
+    return result
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--aggregate-root", type=Path, default=None)
+    parser.add_argument("--json-out", type=Path, default=None)
     parser.add_argument(
         "--model",
         "--model-name",
@@ -573,12 +642,42 @@ def parse_args():
         default=int(os.environ.get("FIXED_EVAL_MAX_WORKERS") or os.environ.get("MAX_CONCURRENCY", 32)),
     )
     parser.add_argument("--max-steps", type=int, default=int(os.environ.get("FIXED_EVAL_MAX_STEPS", 50)))
-    parser.add_argument("--env-num", type=int, default=int(os.environ.get("FIXED_EVAL_ENV_NUM", 200)))
+    parser.add_argument(
+        "--env-num",
+        type=int,
+        default=int(os.environ.get("FIXED_EVAL_ENV_NUM") or os.environ.get("VAL_DATA_SIZE", 200)),
+    )
     parser.add_argument("--test-times", type=int, default=int(os.environ.get("FIXED_EVAL_TEST_TIMES", 3)))
     parser.add_argument("--env-name", default=os.environ.get("FIXED_EVAL_ENV_NAME", "alfworld"))
     parser.add_argument("--eval-dataset", default=os.environ.get("FIXED_EVAL_DATASET", "eval_in_distribution"))
-    parser.add_argument("--history-length", type=int, default=int(os.environ.get("FIXED_EVAL_HISTORY_LENGTH", 2)))
+    parser.add_argument("--history-length", type=int, default=int(os.environ.get("FIXED_EVAL_HISTORY_LENGTH", 3)))
     parser.add_argument("--seed", type=int, default=int(os.environ.get("FIXED_EVAL_SEED", 1)))
+    parser.add_argument(
+        "--skills-json-path",
+        default=os.environ.get("FIXED_ALFWORLD_SKILLS_JSON_PATH"),
+    )
+    parser.add_argument(
+        "--disable-skills",
+        action="store_true",
+        default=os.environ.get("FIXED_EVAL_DISABLE_SKILLS", "0").lower() in ("1", "true", "yes"),
+    )
+    parser.add_argument(
+        "--skill-retrieval-service-url",
+        default=os.environ.get("FIXED_EVAL_SKILL_RETRIEVAL_SERVICE_URL"),
+    )
+    parser.add_argument("--retrieval-mode", default=os.environ.get("FIXED_EVAL_RETRIEVAL_MODE", "embedding"))
+    parser.add_argument(
+        "--skill-text-for-retrieval",
+        default=os.environ.get("FIXED_EVAL_SKILL_TEXT_FOR_RETRIEVAL", "when_to_apply"),
+    )
+    parser.add_argument(
+        "--similarity-threshold",
+        type=float,
+        default=float(os.environ.get("FIXED_EVAL_SIMILARITY_THRESHOLD", 0.7)),
+    )
+    parser.add_argument("--top-k-task", type=int, default=int(os.environ.get("FIXED_EVAL_TOP_K_TASK", 3)))
+    parser.add_argument("--top-k-step", type=int, default=int(os.environ.get("FIXED_EVAL_TOP_K_STEP", 3)))
+    parser.add_argument("--skill-gen-mode", default=os.environ.get("FIXED_EVAL_SKILL_GEN_MODE", "task_step"))
     parser.add_argument(
         "--output-root",
         default=os.environ.get(
@@ -593,6 +692,11 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.aggregate_root is not None:
+        json_out = args.json_out or args.aggregate_root / "fixed_route_metric_summary.json"
+        aggregate_final_summaries(args.aggregate_root, json_out)
+        return
+
     model_name, api_base, api_key = resolve_model(args.model, args.api_base, args.api_key)
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -609,6 +713,15 @@ def main():
         args.max_concurrency,
         args.history_length,
     )
+    logging.info(
+        "Skills enabled=%s skills_json_path=%s retrieval_mode=%s top_k_task=%s top_k_step=%s skill_retrieval_service_url=%s",
+        not args.disable_skills,
+        args.skills_json_path,
+        args.retrieval_mode,
+        args.top_k_task,
+        args.top_k_step,
+        args.skill_retrieval_service_url,
+    )
 
     env_manager = build_env(
         env_name=args.env_name,
@@ -616,6 +729,15 @@ def main():
         seed=args.seed,
         history_length=args.history_length,
         eval_dataset=args.eval_dataset,
+        use_skills_only_memory=not args.disable_skills,
+        skills_json_path=args.skills_json_path,
+        skill_retrieval_service_url=args.skill_retrieval_service_url,
+        retrieval_mode=args.retrieval_mode,
+        skill_text_for_retrieval=args.skill_text_for_retrieval,
+        similarity_threshold=args.similarity_threshold,
+        top_k_task=args.top_k_task,
+        top_k_step=args.top_k_step,
+        skill_gen_mode=args.skill_gen_mode,
     )
     agent = Agent(
         model_name=model_name,
