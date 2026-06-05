@@ -20,8 +20,8 @@ import argparse
 import sys
 from pathlib import Path
 
-# Repo root
-_repo_root = Path(__file__).resolve().parents[2]
+# Repo root. This file lives in <repo>/examples_d2skill/.
+_repo_root = Path(__file__).resolve().parents[1]
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 

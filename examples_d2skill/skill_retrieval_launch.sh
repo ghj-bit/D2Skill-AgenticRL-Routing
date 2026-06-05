@@ -10,8 +10,8 @@ cd "$REPO_ROOT"
 
 # 8 cards by default; use CUDA_VISIBLE_DEVICES to limit (e.g. 0,1,2,3 for 4 cards)
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-NUM_GPUS=8
-SKILLS_JSON=None
+NUM_GPUS="${NUM_GPUS:-8}"
+SKILLS_JSON="${SKILLS_JSON:-}"
 # EMBEDDING_MODEL="${EMBEDDING_MODEL:-/data/group/project3/project3_cluster3_data/hf_models/Qwen3-Embedding-0.6B}"
 EMBEDDING_MODEL="${EMBEDDING_MODEL:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-Embedding-0.6B}"
 
@@ -24,7 +24,7 @@ ARGS=(
   --num_gpus "$NUM_GPUS"
   --embedding_model_path "$EMBEDDING_MODEL"
 )
-if [[ -n "$SKILLS_JSON" && "$SKILLS_JSON" != "None" ]]; then
+if [[ -n "$SKILLS_JSON" && "${SKILLS_JSON,,}" != "none" ]]; then
   ARGS+=(--skills_json_path "$SKILLS_JSON")
 fi
 
