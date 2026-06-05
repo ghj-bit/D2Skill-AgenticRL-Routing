@@ -8,8 +8,7 @@ export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
 export FIXED_EVAL_DUMP_TRACE="${FIXED_EVAL_DUMP_TRACE:-1}"
 export VAL_DATA_SIZE="${VAL_DATA_SIZE:-16}"
 export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
-export FIXED_ALFWORLD_SKILLS_JSON_PATH="${FIXED_ALFWORLD_SKILLS_JSON_PATH:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/D2Skill-AgenticRL-Routing/checkpoints/verl_agent_alfworld_gigpo/gigpo_qwen3-4b_skills_d2skill_0527/updated_skills_train_step140.json}"
-export FIXED_EVAL_EMBEDDING_MODEL_PATH="${FIXED_EVAL_EMBEDDING_MODEL_PATH:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/Qwen/Qwen3-Embedding-0.6B}"
+export FIXED_ALFWORLD_SKILLS_JSON_PATH="${FIXED_ALFWORLD_SKILLS_JSON_PATH:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/D2Skill-AgenticRL-Routing/checkpoints/verl_routing_alfworld_gigpo/gigpo_qwen2.5-3b_skills_d2skill/updated_skills_train_step30.json}"
 RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 LOG_ROOT="${LOG_ROOT:-${SCRIPT_DIR}/fixed_route_3x_logs}"
@@ -25,12 +24,12 @@ fi
 SKILL_ARGS=()
 if [[ -n "${FIXED_ALFWORLD_SKILLS_JSON_PATH}" ]]; then
     SKILL_ARGS+=(
-        --skills-json-path "$FIXED_ALFWORLD_SKILLS_JSON_PATH"
+        env.skills_only_memory.skills_json_path="$FIXED_ALFWORLD_SKILLS_JSON_PATH"
     )
     echo "Loading AlfWorld skills from: ${FIXED_ALFWORLD_SKILLS_JSON_PATH}"
 else
     SKILL_ARGS+=(
-        --skills-json-path None
+        env.skills_only_memory.skills_json_path=None
     )
     echo "No initial AlfWorld skills path configured; starting with empty skills."
 fi
@@ -39,32 +38,39 @@ mkdir -p "$MODEL_LOG_DIR"
 
 for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     seed=$((BASE_SEED + run_idx))
-    eval_seed=$((seed + 1000))
     log_path="${MODEL_LOG_DIR}/seed_${seed}.log"
-    output_dir="${MODEL_LOG_DIR}/seed_${seed}"
-    TRACE_ARGS=()
-    if [[ "$FIXED_EVAL_DUMP_TRACE" == "1" || "$FIXED_EVAL_DUMP_TRACE" == "true" || "$FIXED_EVAL_DUMP_TRACE" == "True" ]]; then
-        TRACE_ARGS+=(--record-trajectories)
-    fi
+    experiment_name="fixed_${FIXED_ROUTE_MODEL}_seed${seed}"
 
     echo "[FixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} log=${log_path}"
-    python3 "${SCRIPT_DIR}/fixed_model_alfworld_eval.py" \
-        --model "$FIXED_ROUTE_MODEL" \
-        --env-num "$VAL_DATA_SIZE" \
-        --seed "$eval_seed" \
-        --test-times 1 \
-        --max-steps 50 \
-        --max-concurrency "$MAX_CONCURRENCY" \
-        --history-length 2 \
-        --eval-dataset eval_in_distribution \
-        --embedding-model-path "$FIXED_EVAL_EMBEDDING_MODEL_PATH" \
-        --output-dir "$output_dir" \
+    bash "${SCRIPT_DIR}/run_alfworld_d2skill.sh" "$ENGINE" \
+        routing.force_model_enable=True \
+        routing.force_model_name="$FIXED_ROUTE_MODEL" \
+        data.val_batch_size="$VAL_DATA_SIZE" \
+        env.seed="$seed" \
+        +env.val_seed="$((seed + 1))" \
+        env.use_skills_only_memory=True \
+        env.skills_only_memory.enable_dynamic_update=True \
+        env.skills_only_memory.update_source=validation \
+        env.skills_only_memory.update_save_traj=True \
         "${SKILL_ARGS[@]}" \
-        "${TRACE_ARGS[@]}" \
+        trainer.val_only=True \
+        +trainer.fixed_eval_style_logging="$FIXED_EVAL_STYLE_LOGGING" \
+        +trainer.dump_random_trace_json="$FIXED_EVAL_DUMP_TRACE" \
+        +trainer.write_validation_alfworld_task_success=True \
+        trainer.n_gpus_per_node=4 \
+        actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
+        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
+        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
+        actor_rollout_ref.rollout.max_num_seqs=256 \
+        ray_init.num_cpus=40 \
+        trainer.project_name='verl_agent_alfworld_fixed_route' \
+        trainer.experiment_name="$experiment_name" \
         "$@" \
         2>&1 | tee "$log_path"
 done
 
-python3 "${SCRIPT_DIR}/fixed_model_alfworld_eval.py" \
-    --aggregate-root "$MODEL_LOG_DIR" \
-    --json-out "$SUMMARY_JSON"
+python3 "${SCRIPT_DIR}/aggregate_fixed_route_metrics.py" "$LOG_ROOT" \
+    --json-out "$SUMMARY_JSON" \
+    --wandb-name "fixed_${FIXED_ROUTE_MODEL}_3x_summary" \
+    --no-wandb
