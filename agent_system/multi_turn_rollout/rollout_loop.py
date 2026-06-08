@@ -138,10 +138,12 @@ class TrajectoryCollector:
         obs_images = obs.get('image', None)
         obs_anchors = obs.get('anchor', None)
         obs_query_texts = obs.get('query_text', None)
+        obs_systems = obs.get('system', None)
         obs_text = obs_texts[item] if obs_texts is not None else None
         obs_image = obs_images[item] if obs_images is not None else None
         obs_anchor = obs_anchors[item] if obs_anchors is not None else None
         obs_query_text = (obs_query_texts[item] if obs_query_texts is not None and item < len(obs_query_texts) else None) or ""
+        obs_system = (obs_systems[item] if obs_systems is not None and item < len(obs_systems) else None) or ""
         is_multi_modal = obs_image is not None
 
         _obs_anchor = torch_to_numpy(obs_anchor, is_object=True) if isinstance(obs_anchor, torch.Tensor) else obs_anchor
@@ -159,10 +161,17 @@ class TrajectoryCollector:
             print(f"Warning: No text observation found!")
 
         
-        chat = np.array([{
+        chat_messages = []
+        if obs_system:
+            chat_messages.append({
+                "content": obs_system,
+                "role": "system",
+            })
+        chat_messages.append({
             "content": obs_content,
             "role": "user",
-        }])
+        })
+        chat = np.array(chat_messages)
         
         # Apply chat template
         prompt_with_chat_template = self.tokenizer.apply_chat_template(
@@ -972,6 +981,7 @@ class TrajectoryCollector:
         #     "model_name": contents,
         #     "query": contexts
         # }
+        system_contexts = original_obs.get('system', None)
         route_queries = {
             "model_name": [
                 forced_route_model or content
@@ -982,7 +992,12 @@ class TrajectoryCollector:
                 context
                 for action, context in zip(cur_actions, contexts)
                 if action == 'search'
-            ]
+            ],
+            "system": [
+                system_prompt
+                for action, system_prompt in zip(cur_actions, system_contexts or [''] * len(cur_actions))
+                if action == 'search'
+            ],
         }
         if do_route:
             route_results, completion_tokens_list, called_model_names, called_model_elapsed_seconds = self.batch_route(route_queries)

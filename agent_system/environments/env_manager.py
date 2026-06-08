@@ -1350,7 +1350,8 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.pre_text_obs = text_obs
 
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
-        return {'text': full_text_obs, 'image': None, 'anchor': text_obs}, {'text': route_text_obs, 'image': None, 'anchor': text_obs}, infos
+        system_prompts = [TEXTCRAFT_SYSTEM_PROMPT] * len(text_obs)
+        return {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'system': system_prompts}, {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'system': system_prompts}, infos
 
     def step(self, text_actions: List[str], models: List[str] = []):
         actions, valids = self.projection_f(text_actions)
@@ -1376,8 +1377,9 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             f"{self.tasks[i]}\n\nCurrent observation: {text_obs[i]}"
             for i in range(len(text_obs))
         ]
-        next_observations = {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts}
-        next_route_observations = {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts}
+        system_prompts = [TEXTCRAFT_SYSTEM_PROMPT] * len(text_obs)
+        next_observations = {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts, 'system': system_prompts}
+        next_route_observations = {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts, 'system': system_prompts}
         return next_observations, next_route_observations, to_numpy(rewards), to_numpy(dones), infos
 
     def extract_task(self, text_obs: str) -> str:
@@ -1399,7 +1401,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         for j, rec in enumerate(recent):
             step_num = start_idx + j + 1
             model_name = rec.get("model", "") or "none"
-            action_preview = self._short_preview(rec.get("routed_model_output", rec.get("action", "")))
+            action_preview = self._short_preview(rec.get("action", ""))
             result_preview = self._short_preview(rec.get("result_obs", rec.get("text_obs", "")))
             lines.append(
                 f"Step {step_num} [Model: {model_name}]: "

@@ -26,6 +26,7 @@ def get_llm_response_via_api(prompt,
                              LLM_MODEL="",
                              base_url="",
                              api_key="",
+                             system_prompt="",
                              TAU=1.0,
                              TOP_P=1.0,
                              SEED=42,
@@ -41,11 +42,13 @@ def get_llm_response_via_api(prompt,
     while MAX_TRIALS:
         MAX_TRIALS -= 1
         try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
             completion = client.chat.completions.create(
                 model=LLM_MODEL,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
+                messages=messages,
                 temperature=0.4,
                 n=1,
                 max_tokens=2048,
@@ -167,7 +170,7 @@ If you are completely unable to answer the question or provide any relevant or h
 # """
 
 def request_task(data):
-    q_id, query_text, TAU, LLM_NAME, api_base, api_key = data
+    q_id, query_text, system_prompt, TAU, LLM_NAME, api_base, api_key = data
     if LLM_NAME == "":
         print("LLM Name Error")
         return q_id, "LLM Name Error", 0.0, "", 0.0
@@ -178,6 +181,7 @@ def request_task(data):
         single_response, token_usage = get_llm_response_via_api(prompt=query_text,
                                                                 base_url=api_base,
                                                                 api_key=api_key,
+                                                                system_prompt=system_prompt,
                                                                 TAU=TAU,
                                                                 LLM_MODEL=LLM_NAME)
         print(single_response, token_usage)
@@ -239,7 +243,8 @@ def check_llm_name(target_llm):
 
 def access_routing_pool(queries, api_base, api_key):
     task_args = []
-    for q_id, (target_llm, query_text) in enumerate(zip(queries['model_name'], queries['query'])):
+    system_prompts = queries.get("system") or [""] * len(queries["query"])
+    for q_id, (target_llm, query_text, system_prompt) in enumerate(zip(queries['model_name'], queries['query'], system_prompts)):
         # print(f"索引: {idx}")
         # print(f"action: {action}")
         # print(f"context: {context}")
@@ -259,7 +264,7 @@ def access_routing_pool(queries, api_base, api_key):
             # print(f'LLM_NAME: {LLM_NAME}, api_base: {api_base}, api_key: {api_key}')
         else:
             print("模型不存在")
-        task_args.append((q_id, query_text, TAU, LLM_NAME, api_base, api_key))
+        task_args.append((q_id, query_text, system_prompt or "", TAU, LLM_NAME, api_base, api_key))
 
     ret = []
     max_concurrency = int(os.environ.get("MAX_CONCURRENCY", "8"))
