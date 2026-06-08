@@ -69,7 +69,7 @@ mode="${GIGPO_MODE:-mean_norm}"
 if [[ -f "$TEXTCRAFT_PARQUET_DIR/train.parquet" && -f "$TEXTCRAFT_PARQUET_DIR/test.parquet" ]]; then
   echo "TextCraft parquet already exists, skip prepare: $TEXTCRAFT_PARQUET_DIR"
 else
-  python3 "${SCRIPT_DIR}/prepare_agentgym_textcraft_data.py" \
+  python3 "${SCRIPT_DIR}/textcraft/non_fixed/prepare_agentgym_textcraft_data.py" \
     --train-json "$TEXTCRAFT_TRAIN_JSON" \
     --val-json "$TEXTCRAFT_VAL_JSON" \
     --output-dir "$TEXTCRAFT_PARQUET_DIR"

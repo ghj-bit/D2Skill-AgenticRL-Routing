@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+EXAMPLES_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+PROJECT_DIR="$(cd -- "${EXAMPLES_DIR}/.." && pwd)"
 
 ENGINE="vllm"
 if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" == "ray" ) ]]; then

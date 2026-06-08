@@ -88,6 +88,7 @@ class TextCraftMultiProcessEnv:
         ]
         self._dones = [False] * self.num_processes
         self._last_obs = [""] * self.num_processes
+        self._active_count = self.num_processes
 
     def _sample_indices(self) -> List[int]:
         if self.is_train:
@@ -111,12 +112,13 @@ class TextCraftMultiProcessEnv:
             if isinstance(value, dict):
                 value = value.get("data_idx", value.get("item_id"))
             indices.append(int(value))
-        if len(indices) != self.num_processes:
-            raise ValueError(f"Expected {self.num_processes} TextCraft data_idx values, got {len(indices)}")
+        if len(indices) > self.num_processes:
+            raise ValueError(f"Expected at most {self.num_processes} TextCraft data_idx values, got {len(indices)}")
         return indices
 
     def reset(self, kwargs=None):
         indices = self._indices_from_kwargs(kwargs) or self._sample_indices()
+        self._active_count = len(indices)
         futures = [self._executor.submit(client.reset, idx) for client, idx in zip(self._clients, indices)]
         obs_list, info_list = [], []
         for idx, future in zip(indices, futures):
@@ -136,11 +138,12 @@ class TextCraftMultiProcessEnv:
         return obs_list, info_list
 
     def step(self, actions: List[str]):
-        if len(actions) != self.num_processes:
-            raise ValueError(f"Expected {self.num_processes} actions, got {len(actions)}")
+        expected = int(getattr(self, "_active_count", self.num_processes))
+        if len(actions) != expected:
+            raise ValueError(f"Expected {expected} actions, got {len(actions)}")
         futures = [
             None if self._dones[i] else self._executor.submit(client.step, action)
-            for i, (client, action) in enumerate(zip(self._clients, actions))
+            for i, (client, action) in enumerate(zip(self._clients[:expected], actions))
         ]
         obs_list, reward_list, done_list, info_list = [], [], [], []
         for i, future in enumerate(futures):
