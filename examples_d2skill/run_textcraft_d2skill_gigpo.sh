@@ -124,7 +124,7 @@ python3 -m verl.trainer.main_ppo \
   env.max_steps="$max_steps" \
   env.rollout.n="$group_size" \
   env.resources_per_worker.num_cpus=0.1 \
-  env.history_length=3 \
+  env.history_length=2 \
   +env.textcraft="{env_addr: '${TEXTCRAFT_ENV_SERVER_URL}', timeout: ${TEXTCRAFT_TIMEOUT}, minecraft_dir: '${TEXTCRAFT_MINECRAFT_DIR}', commands: ${TEXTCRAFT_COMMANDS}, goal: ${TEXTCRAFT_GOAL}, data_len: ${TEXTCRAFT_DATA_LEN}, val_offset: ${TEXTCRAFT_VAL_OFFSET}}" \
   trainer.critic_warmup=0 \
   trainer.logger=['console','wandb'] \
