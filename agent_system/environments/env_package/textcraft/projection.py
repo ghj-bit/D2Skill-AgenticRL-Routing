@@ -19,6 +19,14 @@ def textcraft_projection(actions: List[str]):
             reasoning = match.group(1).strip()
             action = match.group(2).strip()
             valids[len(projected)] = int(bool(reasoning) and bool(action))
+        else:
+            action_matches = re.findall(
+                r"<action>\s*(.*?)\s*</action>",
+                stripped,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            if len(action_matches) == 1:
+                action = action_matches[0].strip()
 
         action = re.sub(r"[^A-Za-z0-9, ]+", "", action)
         action = " ".join(action.split()).strip().lower()
