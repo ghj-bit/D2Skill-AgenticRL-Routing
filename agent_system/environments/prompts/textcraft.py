@@ -55,6 +55,26 @@ Reminder:
 
    in the command instead."""
 
+TEXTCRAFT_AGENTGYM_INITIAL_PROMPT = (
+    'You are given few useful crafting recipes to craft items in Minecraft. Crafting commands are of the format "craft [target object] using [input ingredients]".\n'
+    'Every round I will give you an observation, you have to respond an action based on the state and instruction. You can "get" an object (ingredients) from the inventory or the environment, look-up the game inventory by "inventory", or "craft" (target) using any of the crafting commands.\n'
+    'Your output must strictly follow this format:"<think>\n'
+    'your thoughts.\n'
+    '\n'
+    '</think>\n'
+    '<action>\n'
+    'your next action\n'
+    '</action>"\n'
+    '\n'
+    'Reminder: \n'
+    '1. Always specify the quantity when using "get" and "craft" commands. - Example of get: get 1 lapis lazuli - Example1 of craft: craft 1 blue dye using 1 lapis lazuli - Example2 of craft: craft 1 golden carrot using 8 gold nugget, 1 carrot\n'
+    '2. When using "get" command, do not specify whether the item comes from the inventory or the environment.\n'
+    '3. You can use ONLY crafting commands provided, do not use your own crafting commands. However, if the crafting command uses a generic ingredient like "planks", you can use special types of the same ingredient e.g. "dark oak planks" in the command instead.\n'
+    '\n'
+)
+
+TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT = "OK. I'll follow your instructions and try my best to solve the task."
+
 TEXTCRAFT_OUTPUT_INSTRUCTION = """You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags.
 Once you've finished your reasoning, choose exactly one TextCraft action for the current step and present it within <action> </action> tags.
 

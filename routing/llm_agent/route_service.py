@@ -45,10 +45,15 @@ def get_llm_response_via_api(prompt,
     while MAX_TRIALS:
         MAX_TRIALS -= 1
         try:
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
+            if isinstance(prompt, list):
+                messages = prompt
+                if system_prompt and not any(m.get("role") == "system" for m in messages if isinstance(m, dict)):
+                    messages = [{"role": "system", "content": system_prompt}] + messages
+            else:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
             completion = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=messages,

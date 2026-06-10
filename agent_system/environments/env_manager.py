@@ -1341,7 +1341,38 @@ class AppWorldEnvironmentManager(EnvironmentManagerBase):
 class TextCraftEnvironmentManager(EnvironmentManagerBase):
     def __init__(self, envs, projection_f, config):
         self.memory = SimpleMemory()
+        self.agentgym_conversations = None
         super().__init__(envs, projection_f, config)
+
+    def _use_agentgym_prompt(self) -> bool:
+        return bool(self.config.env.get("textcraft_agentgym_prompt", False))
+
+    def _reset_agentgym_conversations(self, text_obs: List[str]):
+        self.agentgym_conversations = [
+            [
+                {"role": "user", "content": TEXTCRAFT_AGENTGYM_INITIAL_PROMPT},
+                {"role": "assistant", "content": TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT},
+                {"role": "user", "content": obs},
+            ]
+            for obs in text_obs
+        ]
+
+    def _agentgym_chat_payload(self):
+        if self.agentgym_conversations is None:
+            return None
+        return [[dict(message) for message in conversation] for conversation in self.agentgym_conversations]
+
+    def _attach_textcraft_prompts(self, observations: Dict[str, Any], system_prompts: List[str]):
+        if self._use_agentgym_prompt():
+            observations["chat"] = self._agentgym_chat_payload()
+        else:
+            observations["system"] = system_prompts
+        return observations
+
+    def _attach_textcraft_route_prompts(self, observations: Dict[str, Any], system_prompts: List[str]):
+        if not self._use_agentgym_prompt():
+            observations["system"] = system_prompts
+        return observations
 
     def reset(self, kwargs):
         text_obs, infos = self.envs.reset(kwargs=kwargs)
@@ -1351,11 +1382,27 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
 
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
         system_prompts = [TEXTCRAFT_SYSTEM_PROMPT] * len(text_obs)
-        return {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'system': system_prompts}, {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'system': system_prompts}, infos
+        if self._use_agentgym_prompt():
+            self._reset_agentgym_conversations(text_obs)
+        else:
+            self.agentgym_conversations = None
+        observations = self._attach_textcraft_prompts(
+            {'text': full_text_obs, 'image': None, 'anchor': text_obs},
+            system_prompts,
+        )
+        route_observations = self._attach_textcraft_route_prompts(
+            {'text': route_text_obs, 'image': None, 'anchor': text_obs},
+            system_prompts,
+        )
+        return observations, route_observations, infos
 
     def step(self, text_actions: List[str], models: List[str] = []):
         actions, valids = self.projection_f(text_actions)
         text_obs, rewards, dones, infos = self.envs.step(actions)
+        if self._use_agentgym_prompt() and self.agentgym_conversations is not None:
+            for i in range(min(len(text_obs), len(self.agentgym_conversations))):
+                self.agentgym_conversations[i].append({"role": "assistant", "content": text_actions[i]})
+                self.agentgym_conversations[i].append({"role": "user", "content": text_obs[i]})
         self.memory.store(
             {
                 'text_obs': self.pre_text_obs,
@@ -1378,8 +1425,14 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             for i in range(len(text_obs))
         ]
         system_prompts = [TEXTCRAFT_SYSTEM_PROMPT] * len(text_obs)
-        next_observations = {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts, 'system': system_prompts}
-        next_route_observations = {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts, 'system': system_prompts}
+        next_observations = self._attach_textcraft_prompts(
+            {'text': full_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts},
+            system_prompts,
+        )
+        next_route_observations = self._attach_textcraft_route_prompts(
+            {'text': route_text_obs, 'image': None, 'anchor': text_obs, 'query_text': query_texts},
+            system_prompts,
+        )
         return next_observations, next_route_observations, to_numpy(rewards), to_numpy(dones), infos
 
     def extract_task(self, text_obs: str) -> str:
