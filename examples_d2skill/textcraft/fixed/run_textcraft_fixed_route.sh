@@ -9,8 +9,9 @@ export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-qwen3-8B}"
 export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
 export FIXED_EVAL_DUMP_TRACE="${FIXED_EVAL_DUMP_TRACE:-1}"
 export VAL_DATA_SIZE="${VAL_DATA_SIZE:-100}"
-export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
-RUNS="${RUNS:-3}"
+export MAX_CONCURRENCY="${MAX_CONCURRENCY:-8}"
+export ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-2048}"
+RUNS="${RUNS:-1}"
 BASE_SEED="${BASE_SEED:-0}"
 FIXED_TEXTCRAFT_OUTPUT_DIR="verl_agent_textcraft_fixed_route"
 LOG_ROOT="${LOG_ROOT:-${PROJECT_DIR}/checkpoints/${FIXED_TEXTCRAFT_OUTPUT_DIR}}"
@@ -31,7 +32,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     experiment_name="fixed_${FIXED_ROUTE_MODEL}_seed${seed}"
     trainer_output_dir="${MODEL_LOG_DIR}/${experiment_name}"
 
-    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_concurrency=${MAX_CONCURRENCY} log=${log_path}"
+    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} log=${log_path}"
     bash "${EXAMPLES_DIR}/run_textcraft_d2skill_gigpo.sh" "$ENGINE" \
         routing.force_model_enable=True \
         routing.force_model_name="$FIXED_ROUTE_MODEL" \
@@ -41,11 +42,11 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         trainer.val_only=True \
         +trainer.fixed_eval_style_logging="$FIXED_EVAL_STYLE_LOGGING" \
         trainer.dump_random_trace_json="$FIXED_EVAL_DUMP_TRACE" \
-        trainer.n_gpus_per_node=4 \
-        actor_rollout_ref.actor.ppo_mini_batch_size=64 \
-        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
-        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
-        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
+        trainer.n_gpus_per_node=1 \
+        actor_rollout_ref.actor.ppo_mini_batch_size=16 \
+        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
+        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
+        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
         actor_rollout_ref.rollout.max_num_seqs=256 \
         ray_init.num_cpus=40 \
         trainer.project_name="$FIXED_TEXTCRAFT_OUTPUT_DIR" \

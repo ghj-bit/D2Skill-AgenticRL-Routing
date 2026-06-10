@@ -691,10 +691,22 @@ class TrajectoryCollector:
                 else [self._router_action_for_record(action) for action in route_actions_str]
             )
             if dump_random_trace and trace_index is not None and trace_index < batch_size and active_masks[trace_index]:
+                routed_user_prompt = original_obs["text"][trace_index] if original_obs.get("text") is not None else None
+                routed_system_prompts = original_obs.get("system", None)
+                routed_system_prompt = (
+                    routed_system_prompts[trace_index]
+                    if routed_system_prompts is not None and trace_index < len(routed_system_prompts)
+                    else ""
+                )
+                routed_model_prompt_for_trace = (
+                    f"System prompt:\n{routed_system_prompt}\n\nUser prompt:\n{routed_user_prompt}"
+                    if routed_system_prompt
+                    else routed_user_prompt
+                )
                 trace_steps.append({
                     "router_prompt": route_obs["text"][trace_index] if route_obs.get("text") is not None else None,
                     "router_output": route_actions_for_record[trace_index] if trace_index < len(route_actions_for_record) else "",
-                    "routed_model_prompt": original_obs["text"][trace_index] if original_obs.get("text") is not None else None,
+                    "routed_model_prompt": routed_model_prompt_for_trace,
                     "routed_model_output": text_model_actions[trace_index] if trace_index < len(text_model_actions) else "",
                 })
             batch.non_tensor_batch['router_actions'] = np.array(

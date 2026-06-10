@@ -38,6 +38,7 @@ def get_llm_response_via_api(prompt,
     res = get_llm_response_via_api(prompt='hello', TAU=0.5, N=2, SEED=None)  # Return Multiple Responses w/ TAU Sampling
     '''
     client = get_client(base_url=base_url, api_key=api_key)
+    max_tokens = int(os.environ.get("ROUTING_LLM_MAX_TOKENS", "2048"))
     completion = None
     while MAX_TRIALS:
         MAX_TRIALS -= 1
@@ -51,7 +52,7 @@ def get_llm_response_via_api(prompt,
                 messages=messages,
                 temperature=0.4,
                 n=1,
-                max_tokens=2048,
+                max_tokens=max_tokens,
                 stop=None
             )
             break
