@@ -11,6 +11,7 @@ export FIXED_EVAL_DUMP_TRACE="${FIXED_EVAL_DUMP_TRACE:-1}"
 export VAL_DATA_SIZE="${VAL_DATA_SIZE:-100}"
 export MAX_CONCURRENCY="${MAX_CONCURRENCY:-8}"
 export ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-2048}"
+export TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION="${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION:-0.3}"
 RUNS="${RUNS:-1}"
 BASE_SEED="${BASE_SEED:-0}"
 FIXED_TEXTCRAFT_OUTPUT_DIR="verl_agent_textcraft_fixed_route"
@@ -32,7 +33,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     experiment_name="fixed_${FIXED_ROUTE_MODEL}_seed${seed}"
     trainer_output_dir="${MODEL_LOG_DIR}/${experiment_name}"
 
-    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} log=${log_path}"
+    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
     bash "${EXAMPLES_DIR}/run_textcraft_d2skill_gigpo.sh" "$ENGINE" \
         routing.force_model_enable=True \
         routing.force_model_name="$FIXED_ROUTE_MODEL" \
@@ -47,6 +48,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
         actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
         actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
+        actor_rollout_ref.rollout.gpu_memory_utilization="$TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION" \
         actor_rollout_ref.rollout.max_num_seqs=256 \
         ray_init.num_cpus=5 \
         trainer.project_name="$FIXED_TEXTCRAFT_OUTPUT_DIR" \
