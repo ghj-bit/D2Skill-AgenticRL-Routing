@@ -8,10 +8,16 @@ PROJECT_DIR="$(cd -- "${EXAMPLES_DIR}/.." && pwd)"
 export FIXED_ROUTE_MODEL="${FIXED_ROUTE_MODEL:-qwen3-8B}"
 export FIXED_EVAL_STYLE_LOGGING="${FIXED_EVAL_STYLE_LOGGING:-1}"
 export FIXED_EVAL_DUMP_TRACE="${FIXED_EVAL_DUMP_TRACE:-1}"
-export VAL_DATA_SIZE="${VAL_DATA_SIZE:-100}"
-export MAX_CONCURRENCY="${MAX_CONCURRENCY:-8}"
-export ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-2048}"
+export TEXTCRAFT_TIMEOUT="${TEXTCRAFT_TIMEOUT:-2400}"
+export TEXTCRAFT_DATA_LEN="${TEXTCRAFT_DATA_LEN:-200}"
+export VAL_DATA_SIZE="${VAL_DATA_SIZE:-200}"
+export MAX_CONCURRENCY="${MAX_CONCURRENCY:-15}"
+export ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-4096}"
+export ROUTING_LLM_TEMPERATURE="${ROUTING_LLM_TEMPERATURE:-1.0}"
+export ROUTING_LLM_TOP_P="${ROUTING_LLM_TOP_P:-1}"
 export TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION="${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION:-0.3}"
+export TEXTCRAFT_MAX_STEPS="${TEXTCRAFT_MAX_STEPS:-20}"
+export TEXTCRAFT_HISTORY_LENGTH="${TEXTCRAFT_HISTORY_LENGTH:-20}"
 RUNS="${RUNS:-1}"
 BASE_SEED="${BASE_SEED:-0}"
 FIXED_TEXTCRAFT_OUTPUT_DIR="verl_agent_textcraft_fixed_route"
@@ -33,11 +39,12 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     experiment_name="fixed_${FIXED_ROUTE_MODEL}_seed${seed}"
     trainer_output_dir="${MODEL_LOG_DIR}/${experiment_name}"
 
-    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
+    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} val_data_size=${VAL_DATA_SIZE} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
     bash "${EXAMPLES_DIR}/run_textcraft_d2skill_gigpo.sh" "$ENGINE" \
         routing.force_model_enable=True \
         routing.force_model_name="$FIXED_ROUTE_MODEL" \
         data.val_batch_size="$VAL_DATA_SIZE" \
+        env.history_length="$TEXTCRAFT_HISTORY_LENGTH" \
         env.seed="$seed" \
         +env.val_seed="$((seed + 1))" \
         trainer.val_only=True \

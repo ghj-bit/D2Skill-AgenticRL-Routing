@@ -39,6 +39,8 @@ def get_llm_response_via_api(prompt,
     '''
     client = get_client(base_url=base_url, api_key=api_key)
     max_tokens = int(os.environ.get("ROUTING_LLM_MAX_TOKENS", "2048"))
+    temperature = float(os.environ.get("ROUTING_LLM_TEMPERATURE", str(TAU)))
+    top_p = float(os.environ.get("ROUTING_LLM_TOP_P", str(TOP_P)))
     completion = None
     while MAX_TRIALS:
         MAX_TRIALS -= 1
@@ -50,9 +52,10 @@ def get_llm_response_via_api(prompt,
             completion = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=messages,
-                temperature=0.4,
+                temperature=temperature,
                 n=1,
                 max_tokens=max_tokens,
+                top_p=top_p,
                 stop=None
             )
             break
