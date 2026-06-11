@@ -1279,7 +1279,17 @@ class RayPPOTrainer:
             return f"textcraft_{i}"
 
         task_stats = defaultdict(lambda: {"success": 0, "total": 0, "api_cost": 0.0})
-        depth_stats = defaultdict(lambda: {"success": 0, "total": 0, "success_items": [], "failed_items": []})
+        depth_stats = defaultdict(
+            lambda: {
+                "success": 0,
+                "total": 0,
+                "api_cost": 0.0,
+                "finished_step_sum": 0.0,
+                "finished_step_count": 0,
+                "success_items": [],
+                "failed_items": [],
+            }
+        )
         per_env_results = {}
         for i, uid in enumerate(unique_traj_uids):
             task = str(unique_tasks[i] or "unknown")
@@ -1297,6 +1307,11 @@ class RayPPOTrainer:
             task_stats[task]["api_cost"] += cost
             depth_stats[depth_key]["total"] += 1
             depth_stats[depth_key]["success"] += int(won)
+            depth_stats[depth_key]["api_cost"] += cost
+            finished_step = int(unique_lengths[i]) if np.isfinite(unique_lengths[i]) else None
+            if finished_step is not None:
+                depth_stats[depth_key]["finished_step_sum"] += float(finished_step)
+                depth_stats[depth_key]["finished_step_count"] += 1
             if won:
                 depth_stats[depth_key]["success_items"].append(item_id)
             else:
@@ -1307,7 +1322,7 @@ class RayPPOTrainer:
                 "won": won,
                 "task": task,
                 "depth": depth_key,
-                "finished_step": int(unique_lengths[i]) if np.isfinite(unique_lengths[i]) else None,
+                "finished_step": finished_step,
                 "api_cost": cost,
             }
 
@@ -1333,6 +1348,13 @@ class RayPPOTrainer:
                 "success_rate": float(item["success"] / total),
                 "success": int(item["success"]),
                 "total": total,
+                "api_cost": float(item["api_cost"]),
+                "avg_api_cost": float(item["api_cost"] / total),
+                "avg_finished_step": (
+                    float(item["finished_step_sum"] / item["finished_step_count"])
+                    if item["finished_step_count"] > 0
+                    else None
+                ),
                 "success_items": list(item["success_items"]),
                 "failed_items": list(item["failed_items"]),
             }
