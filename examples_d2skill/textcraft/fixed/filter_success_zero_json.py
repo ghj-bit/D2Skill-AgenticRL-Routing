@@ -6,7 +6,7 @@ from pathlib import Path
 
 DEFAULT_INPUT_DIR = (
     "/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/"
-    "AgentGym-RL/AgentGym/agentenv/examples/basic/outputs/qwen3-8B_textt"
+    "AgentGym-RL/AgentGym/agentenv/examples/basic/outputs/qwen3-8B_textcraft"
 )
 
 
