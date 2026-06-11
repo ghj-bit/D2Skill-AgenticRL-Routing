@@ -14,5 +14,5 @@ fi
 
 bash "${SCRIPT_DIR}/run_textcraft_fixed_route.sh" "${ENGINE_ARGS[@]}" \
     +env.textcraft_fixed_skills_json_path="$TEXTCRAFT_FIXED_SKILLS_JSON_PATH" \
-    +env.textcraft_fixed_skill_ids="$TEXTCRAFT_FIXED_SKILL_IDS" \
+    "+env.textcraft_fixed_skill_ids='${TEXTCRAFT_FIXED_SKILL_IDS}'" \
     "$@"
