@@ -849,6 +849,7 @@ class RayPPOTrainer:
         textcraft_conversation_list = []
         textcraft_data_idx_list = []
         textcraft_item_id_list = []
+        textcraft_depth_list = []
         success_rate_dict = {}
         val_retrieved_list = []  # collect retrieved_memories per validation batch for logging
         val_per_step_retrieved_list = []  # per-step retrieved skills per batch (when per_step_retrieval is True)
@@ -1088,6 +1089,8 @@ class RayPPOTrainer:
                 textcraft_data_idx_list.append(test_output_gen_batch.non_tensor_batch['textcraft_data_idx'])
             if 'textcraft_item_id' in test_output_gen_batch.non_tensor_batch:
                 textcraft_item_id_list.append(test_output_gen_batch.non_tensor_batch['textcraft_item_id'])
+            if 'textcraft_depth' in test_output_gen_batch.non_tensor_batch:
+                textcraft_depth_list.append(test_output_gen_batch.non_tensor_batch['textcraft_depth'])
             # success rate
             for k in test_batch.non_tensor_batch.keys():
                 if 'success_rate' in k:
@@ -1119,6 +1122,7 @@ class RayPPOTrainer:
         textcraft_conversations = np.concatenate(textcraft_conversation_list, axis=0) if textcraft_conversation_list else None
         textcraft_data_idx = np.concatenate(textcraft_data_idx_list, axis=0) if textcraft_data_idx_list else None
         textcraft_item_id = np.concatenate(textcraft_item_id_list, axis=0) if textcraft_item_id_list else None
+        textcraft_depth = np.concatenate(textcraft_depth_list, axis=0) if textcraft_depth_list else None
         success_rate = {k: np.mean(v) for k, v in success_rate_dict.items()}
 
         # evaluate test_score based on data source
@@ -1188,6 +1192,7 @@ class RayPPOTrainer:
             textcraft_conversations=textcraft_conversations,
             textcraft_data_idx=textcraft_data_idx,
             textcraft_item_id=textcraft_item_id,
+            textcraft_depth=textcraft_depth,
         )
 
         # Dynamic Skill Bank Update (validation side): write to both val/train retrieval_memory.
@@ -1223,6 +1228,7 @@ class RayPPOTrainer:
         textcraft_conversations=None,
         textcraft_data_idx=None,
         textcraft_item_id=None,
+        textcraft_depth=None,
     ) -> None:
         """Write compact fixed-model-eval style validation logs when explicitly enabled."""
         if not _as_bool(self.config.trainer.get("fixed_eval_style_logging", False)):
@@ -1246,26 +1252,61 @@ class RayPPOTrainer:
         unique_textcraft_conversations = None
         unique_textcraft_data_idx = None
         unique_textcraft_item_id = None
+        unique_textcraft_depth = None
         if textcraft_conversations is not None:
             unique_textcraft_conversations = np.asarray(textcraft_conversations, dtype=object)[unique_idx]
         if textcraft_data_idx is not None:
             unique_textcraft_data_idx = np.asarray(textcraft_data_idx, dtype=object)[unique_idx]
         if textcraft_item_id is not None:
             unique_textcraft_item_id = np.asarray(textcraft_item_id, dtype=object)[unique_idx]
+        if textcraft_depth is not None:
+            unique_textcraft_depth = np.asarray(textcraft_depth, dtype=object)[unique_idx]
+
+        def _normalize_depth(value):
+            if value is None:
+                return None
+            if isinstance(value, np.generic):
+                value = value.item()
+            if isinstance(value, float) and value.is_integer():
+                return int(value)
+            return value
+
+        def _textcraft_item_id(i: int) -> str:
+            if unique_textcraft_item_id is not None:
+                return str(unique_textcraft_item_id[i])
+            if unique_textcraft_data_idx is not None:
+                return f"textcraft_{unique_textcraft_data_idx[i]}"
+            return f"textcraft_{i}"
 
         task_stats = defaultdict(lambda: {"success": 0, "total": 0, "api_cost": 0.0})
+        depth_stats = defaultdict(lambda: {"success": 0, "total": 0, "success_items": [], "failed_items": []})
         per_env_results = {}
         for i, uid in enumerate(unique_traj_uids):
             task = str(unique_tasks[i] or "unknown")
             won = bool(unique_success[i])
             cost = float(unique_costs[i])
+            item_id = _textcraft_item_id(i)
+            depth = (
+                _normalize_depth(unique_textcraft_depth[i])
+                if unique_textcraft_depth is not None and unique_textcraft_depth[i] is not None
+                else None
+            )
+            depth_key = str(depth) if depth is not None else "unknown"
             task_stats[task]["total"] += 1
             task_stats[task]["success"] += int(won)
             task_stats[task]["api_cost"] += cost
+            depth_stats[depth_key]["total"] += 1
+            depth_stats[depth_key]["success"] += int(won)
+            if won:
+                depth_stats[depth_key]["success_items"].append(item_id)
+            else:
+                depth_stats[depth_key]["failed_items"].append(item_id)
             per_env_results[str(i)] = {
                 "traj_uid": str(uid),
+                "item_id": item_id,
                 "won": won,
                 "task": task,
+                "depth": depth_key,
                 "finished_step": int(unique_lengths[i]) if np.isfinite(unique_lengths[i]) else None,
                 "api_cost": cost,
             }
@@ -1283,6 +1324,19 @@ class RayPPOTrainer:
                 "avg_api_cost": float(item["api_cost"] / total),
             }
 
+        depth_rates = {}
+        for depth, item in sorted(depth_stats.items(), key=lambda x: x[0]):
+            total = int(item["total"])
+            if total <= 0:
+                continue
+            depth_rates[str(depth)] = {
+                "success_rate": float(item["success"] / total),
+                "success": int(item["success"]),
+                "total": total,
+                "success_items": list(item["success_items"]),
+                "failed_items": list(item["failed_items"]),
+            }
+
         overall_success = float(np.mean(unique_success)) if unique_success.size else 0.0
         result = {
             "global_step": int(getattr(self, "global_steps", 0)),
@@ -1292,6 +1346,7 @@ class RayPPOTrainer:
             "finished_envs": int(len(unique_idx)),
             "overall_success_rate": overall_success,
             "task_rates": task_rates,
+            "depth_rates": depth_rates,
             "api_cost": {
                 "total": float(np.sum(unique_costs)) if unique_costs.size else 0.0,
                 "avg_per_traj": float(np.mean(unique_costs)) if unique_costs.size else 0.0,
@@ -1335,6 +1390,13 @@ class RayPPOTrainer:
                 }
                 if data_idx is not None:
                     payload["data_idx"] = data_idx
+                depth = (
+                    _normalize_depth(unique_textcraft_depth[i])
+                    if unique_textcraft_depth is not None and unique_textcraft_depth[i] is not None
+                    else None
+                )
+                if depth is not None:
+                    payload["depth"] = depth
                 trajectory_path = os.path.join(trajectory_dir, f"{item_id}.json")
                 with open(trajectory_path, "w", encoding="utf-8") as f:
                     json.dump(payload, f, indent=4, ensure_ascii=False)

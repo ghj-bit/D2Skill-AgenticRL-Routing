@@ -1344,6 +1344,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.memory = SimpleMemory()
         self.agentgym_conversations = None
         self.textcraft_data_indices = []
+        self.textcraft_depths = []
         self.textcraft_fixed_skills_prompt = ""
         super().__init__(envs, projection_f, config)
 
@@ -1410,6 +1411,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
                 {
                     "data_idx": int(data_idx) if data_idx is not None else i,
                     "item_id": f"textcraft_{int(data_idx) if data_idx is not None else i}",
+                    "depth": self.textcraft_depths[i] if i < len(self.textcraft_depths) else None,
                     "conversations": [dict(message) for message in conversation],
                 }
             )
@@ -1432,6 +1434,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.memory.reset(batch_size=len(text_obs))
         self.tasks = [info.get("goal") or self.extract_task(obs) for obs, info in zip(text_obs, infos)]
         self.textcraft_data_indices = [info.get("data_idx", i) for i, info in enumerate(infos)]
+        self.textcraft_depths = [info.get("depth") for info in infos]
         self.pre_text_obs = text_obs
 
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
@@ -1475,6 +1478,8 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             info['is_action_valid'] = to_numpy(valids[i])
             if i < len(self.tasks):
                 info['textcraft_task'] = self.tasks[i]
+            if i < len(self.textcraft_depths) and self.textcraft_depths[i] is not None:
+                info['textcraft_depth'] = self.textcraft_depths[i]
 
         query_texts = [
             f"{self.tasks[i]}\n\nCurrent observation: {text_obs[i]}"

@@ -51,6 +51,7 @@ TEXTCRAFT_GOAL="${TEXTCRAFT_GOAL:-null}"
 TEXTCRAFT_TRAIN_JSON="${TEXTCRAFT_TRAIN_JSON:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym-RL-Data-ID/train/textcraft_train.json}"
 TEXTCRAFT_VAL_JSON="${TEXTCRAFT_VAL_JSON:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym-RL-Data-ID/eval/textcraft_test.json}"
 TEXTCRAFT_PARQUET_DIR="${TEXTCRAFT_PARQUET_DIR:-$HOME/data/verl-agent/textcraft}"
+TEXTCRAFT_FORCE_PREPARE="${TEXTCRAFT_FORCE_PREPARE:-0}"
 
 train_data_size="${TRAIN_DATA_SIZE:-16}"
 val_data_size="${VAL_DATA_SIZE:-64}"
@@ -66,7 +67,7 @@ TEXTCRAFT_ROUTING_API_BASE="${TEXTCRAFT_ROUTING_API_BASE:-}"
 TEXTCRAFT_ROUTING_API_KEY="${TEXTCRAFT_ROUTING_API_KEY:-empty}"
 mode="${GIGPO_MODE:-mean_norm}"
 
-if [[ -f "$TEXTCRAFT_PARQUET_DIR/train.parquet" && -f "$TEXTCRAFT_PARQUET_DIR/test.parquet" ]]; then
+if [[ "$TEXTCRAFT_FORCE_PREPARE" != "1" && -f "$TEXTCRAFT_PARQUET_DIR/train.parquet" && -f "$TEXTCRAFT_PARQUET_DIR/test.parquet" ]]; then
   echo "TextCraft parquet already exists, skip prepare: $TEXTCRAFT_PARQUET_DIR"
 else
   python3 "${SCRIPT_DIR}/textcraft/non_fixed/prepare_agentgym_textcraft_data.py" \

@@ -46,23 +46,41 @@ def _extract_item_id(record, fallback: int):
     return raw_item_id, data_idx
 
 
+def _extract_depth(record):
+    if not isinstance(record, dict):
+        return None
+    for key in ("depth", "task_depth", "recipe_depth", "craft_depth"):
+        if key in record:
+            return record[key]
+    for key, value in record.items():
+        if "depth" in str(key).lower():
+            return value
+    return None
+
+
 def _convert(src: Path, dst: Path, split: str) -> None:
     rows = []
     for idx, record in enumerate(_read_json_records(src)):
         item_id, data_idx = _extract_item_id(record, idx)
+        depth = _extract_depth(record)
+        env_kwargs = {"data_idx": data_idx}
+        extra_info = {
+            "split": split,
+            "index": idx,
+            "item_id": item_id,
+            "data_idx": data_idx,
+        }
+        if depth is not None:
+            env_kwargs["depth"] = depth
+            extra_info["depth"] = depth
         rows.append(
             {
                 "data_source": "textcraft",
                 "item_id": item_id,
                 "prompt": [{"role": "user", "content": ""}],
                 "ability": "agent",
-                "env_kwargs": {"data_idx": data_idx},
-                "extra_info": {
-                    "split": split,
-                    "index": idx,
-                    "item_id": item_id,
-                    "data_idx": data_idx,
-                },
+                "env_kwargs": env_kwargs,
+                "extra_info": extra_info,
             }
         )
     if not rows:

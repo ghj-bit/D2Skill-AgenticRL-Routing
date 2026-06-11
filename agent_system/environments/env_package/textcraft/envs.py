@@ -116,25 +116,60 @@ class TextCraftMultiProcessEnv:
             raise ValueError(f"Expected at most {self.num_processes} TextCraft data_idx values, got {len(indices)}")
         return indices
 
+    def _metadata_from_kwargs(self, kwargs) -> List[Dict[str, Any]]:
+        if kwargs is None:
+            return []
+        values = kwargs
+        if isinstance(values, dict):
+            data_values = values.get("data_idx", values.get("item_id"))
+            depth_values = values.get("depth")
+            if data_values is None:
+                return []
+            if not isinstance(data_values, (list, tuple, np.ndarray)):
+                data_values = [data_values]
+            if depth_values is not None and not isinstance(depth_values, (list, tuple, np.ndarray)):
+                depth_values = [depth_values] * len(data_values)
+            metadata = []
+            for i, data_idx in enumerate(list(data_values)):
+                item = {"data_idx": int(data_idx)}
+                if depth_values is not None and i < len(depth_values):
+                    item["depth"] = depth_values[i]
+                metadata.append(item)
+            return metadata
+        metadata = []
+        for value in list(values):
+            if isinstance(value, dict):
+                item = {}
+                data_idx = value.get("data_idx", value.get("item_id"))
+                if data_idx is not None:
+                    item["data_idx"] = int(data_idx)
+                if "depth" in value:
+                    item["depth"] = value["depth"]
+                metadata.append(item)
+            else:
+                metadata.append({"data_idx": int(value)})
+        return metadata
+
     def reset(self, kwargs=None):
         indices = self._indices_from_kwargs(kwargs) or self._sample_indices()
+        metadata = self._metadata_from_kwargs(kwargs)
         self._active_count = len(indices)
         futures = [self._executor.submit(client.reset, idx) for client, idx in zip(self._clients, indices)]
         obs_list, info_list = [], []
-        for idx, future in zip(indices, futures):
+        for env_i, (idx, future) in enumerate(zip(indices, futures)):
             payload = future.result()
             obs_list.append(payload["observation"])
-            env_i = len(obs_list) - 1
             self._dones[env_i] = False
             self._last_obs[env_i] = payload["observation"]
-            info_list.append(
-                {
-                    "won": False,
-                    "data_idx": idx,
-                    "goal": _extract_goal(payload["observation"]),
-                    "task_score": 0.0,
-                }
-            )
+            info = {
+                "won": False,
+                "data_idx": idx,
+                "goal": _extract_goal(payload["observation"]),
+                "task_score": 0.0,
+            }
+            if env_i < len(metadata) and "depth" in metadata[env_i]:
+                info["depth"] = metadata[env_i]["depth"]
+            info_list.append(info)
         return obs_list, info_list
 
     def step(self, actions: List[str]):
