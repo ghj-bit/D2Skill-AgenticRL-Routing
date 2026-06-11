@@ -1370,14 +1370,16 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         if not isinstance(skills, list):
             raise ValueError(f"TextCraft fixed skills JSON must contain a list: {skills_path}")
 
-        selected = skills
         raw_ids = self.config.env.get("textcraft_fixed_skill_ids", "")
-        if raw_ids not in (None, ""):
-            if isinstance(raw_ids, str):
-                selected_ids = [int(x.strip()) for x in raw_ids.split(",") if x.strip()]
-            else:
-                selected_ids = [int(x) for x in raw_ids]
-            selected = [skills[i] for i in selected_ids]
+        if raw_ids in (None, ""):
+            return ""
+        if isinstance(raw_ids, str):
+            selected_ids = [int(x.strip()) for x in raw_ids.split(",") if x.strip()]
+        else:
+            selected_ids = [int(x) for x in raw_ids]
+        if not selected_ids:
+            return ""
+        selected = [skills[i] for i in selected_ids]
 
         lines = ["", "", "Useful skills for this task:"]
         for i, skill in enumerate(selected, start=1):

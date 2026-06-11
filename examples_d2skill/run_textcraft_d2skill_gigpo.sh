@@ -17,6 +17,7 @@ Useful env vars:
   TEXTCRAFT_TRAIN_JSON=/path/to/textcraft_train.json
   TEXTCRAFT_VAL_JSON=/path/to/textcraft_test.json
   TEXTCRAFT_MINECRAFT_DIR=/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym/agentenv-textcraft/agentenv_textcraft
+  TEXTCRAFT_VAL_ITEM_IDS=444,textcraft_445
   TRAIN_DATA_SIZE=32 VAL_DATA_SIZE=32 GROUP_SIZE=8 TEXTCRAFT_MAX_STEPS=30
 EOF
 }
@@ -52,6 +53,7 @@ TEXTCRAFT_TRAIN_JSON="${TEXTCRAFT_TRAIN_JSON:-/inspire/hdd/project/ai4education/
 TEXTCRAFT_VAL_JSON="${TEXTCRAFT_VAL_JSON:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym-RL-Data-ID/eval/textcraft_test.json}"
 TEXTCRAFT_PARQUET_DIR="${TEXTCRAFT_PARQUET_DIR:-$HOME/data/verl-agent/textcraft}"
 TEXTCRAFT_FORCE_PREPARE="${TEXTCRAFT_FORCE_PREPARE:-0}"
+TEXTCRAFT_VAL_ITEM_IDS="${TEXTCRAFT_VAL_ITEM_IDS:-}"
 
 train_data_size="${TRAIN_DATA_SIZE:-16}"
 val_data_size="${VAL_DATA_SIZE:-64}"
@@ -73,7 +75,8 @@ else
   python3 "${SCRIPT_DIR}/textcraft/non_fixed/prepare_agentgym_textcraft_data.py" \
     --train-json "$TEXTCRAFT_TRAIN_JSON" \
     --val-json "$TEXTCRAFT_VAL_JSON" \
-    --output-dir "$TEXTCRAFT_PARQUET_DIR"
+    --output-dir "$TEXTCRAFT_PARQUET_DIR" \
+    --val-item-ids "$TEXTCRAFT_VAL_ITEM_IDS"
 fi
 
 python3 -m verl.trainer.main_ppo \

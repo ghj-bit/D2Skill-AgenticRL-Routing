@@ -58,10 +58,28 @@ def _extract_depth(record):
     return None
 
 
-def _convert(src: Path, dst: Path, split: str) -> None:
+def _normalize_item_filter(item_ids: str | None):
+    if not item_ids:
+        return None
+    normalized = set()
+    for raw_item_id in item_ids.split(","):
+        raw_item_id = raw_item_id.strip()
+        if not raw_item_id:
+            continue
+        normalized.add(raw_item_id)
+        match = re.search(r"(-?\d+)$", raw_item_id)
+        if match:
+            normalized.add(match.group(1))
+            normalized.add(f"textcraft_{match.group(1)}")
+    return normalized or None
+
+
+def _convert(src: Path, dst: Path, split: str, item_filter=None) -> None:
     rows = []
     for idx, record in enumerate(_read_json_records(src)):
         item_id, data_idx = _extract_item_id(record, idx)
+        if item_filter is not None and str(item_id) not in item_filter and str(data_idx) not in item_filter:
+            continue
         depth = _extract_depth(record)
         env_kwargs = {"data_idx": data_idx}
         extra_info = {
@@ -95,10 +113,11 @@ def main() -> None:
     parser.add_argument("--train-json", required=True, type=Path)
     parser.add_argument("--val-json", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--val-item-ids", default=None, help="Comma-separated validation item ids, e.g. 444,textcraft_445")
     args = parser.parse_args()
 
     _convert(args.train_json, args.output_dir / "train.parquet", "train")
-    _convert(args.val_json, args.output_dir / "test.parquet", "test")
+    _convert(args.val_json, args.output_dir / "test.parquet", "test", _normalize_item_filter(args.val_item_ids))
 
 
 if __name__ == "__main__":
