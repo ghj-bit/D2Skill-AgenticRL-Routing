@@ -1342,6 +1342,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
     def __init__(self, envs, projection_f, config):
         self.memory = SimpleMemory()
         self.agentgym_conversations = None
+        self.textcraft_data_indices = []
         super().__init__(envs, projection_f, config)
 
     def _use_agentgym_prompt(self) -> bool:
@@ -1362,6 +1363,21 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             return None
         return [[dict(message) for message in conversation] for conversation in self.agentgym_conversations]
 
+    def get_textcraft_trajectory_records(self):
+        if self.agentgym_conversations is None:
+            return None
+        records = []
+        for i, conversation in enumerate(self.agentgym_conversations):
+            data_idx = self.textcraft_data_indices[i] if i < len(self.textcraft_data_indices) else i
+            records.append(
+                {
+                    "data_idx": int(data_idx) if data_idx is not None else i,
+                    "item_id": f"textcraft_{int(data_idx) if data_idx is not None else i}",
+                    "conversations": [dict(message) for message in conversation],
+                }
+            )
+        return records
+
     def _attach_textcraft_prompts(self, observations: Dict[str, Any], system_prompts: List[str]):
         if self._use_agentgym_prompt():
             observations["chat"] = self._agentgym_chat_payload()
@@ -1378,6 +1394,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         text_obs, infos = self.envs.reset(kwargs=kwargs)
         self.memory.reset(batch_size=len(text_obs))
         self.tasks = [info.get("goal") or self.extract_task(obs) for obs, info in zip(text_obs, infos)]
+        self.textcraft_data_indices = [info.get("data_idx", i) for i, info in enumerate(infos)]
         self.pre_text_obs = text_obs
 
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)

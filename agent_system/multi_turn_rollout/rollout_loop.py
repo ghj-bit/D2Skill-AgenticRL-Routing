@@ -515,6 +515,25 @@ class TrajectoryCollector:
             st = np.asarray(success["success_rate"])
             gen_batch_output.non_tensor_batch["success_per_traj"] = st[traj_idx]
 
+        textcraft_records = (
+            envs.get_textcraft_trajectory_records()
+            if envs is not None and hasattr(envs, "get_textcraft_trajectory_records")
+            else None
+        )
+        if textcraft_records is not None:
+            n_rows = len(traj_idx)
+            conversations = np.empty(n_rows, dtype=object)
+            data_indices = np.empty(n_rows, dtype=object)
+            item_ids = np.empty(n_rows, dtype=object)
+            for row_i, t_i in enumerate(traj_idx):
+                rec = textcraft_records[int(t_i)]
+                conversations[row_i] = rec.get("conversations", [])
+                data_indices[row_i] = rec.get("data_idx", int(t_i))
+                item_ids[row_i] = rec.get("item_id", f"textcraft_{data_indices[row_i]}")
+            gen_batch_output.non_tensor_batch["textcraft_conversations"] = conversations
+            gen_batch_output.non_tensor_batch["textcraft_data_idx"] = data_indices
+            gen_batch_output.non_tensor_batch["textcraft_item_id"] = item_ids
+
         # When dynamic management is on: add trajectory-derived keys **expanded to row-level**
         # so adjust_batch (select_idxs + concat) and balance_batch never see length mismatch.
         if enable_dynamic_management:

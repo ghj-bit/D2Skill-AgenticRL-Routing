@@ -846,6 +846,9 @@ class RayPPOTrainer:
         called_model_list = []
         api_cost_list = []
         alfworld_task_list = []
+        textcraft_conversation_list = []
+        textcraft_data_idx_list = []
+        textcraft_item_id_list = []
         success_rate_dict = {}
         val_retrieved_list = []  # collect retrieved_memories per validation batch for logging
         val_per_step_retrieved_list = []  # per-step retrieved skills per batch (when per_step_retrieval is True)
@@ -1079,6 +1082,12 @@ class RayPPOTrainer:
                 called_model_list.append(test_output_gen_batch.non_tensor_batch['called_models'])
             if 'success_per_traj' in test_output_gen_batch.non_tensor_batch:
                 success_per_traj_list.append(test_output_gen_batch.non_tensor_batch['success_per_traj'])
+            if 'textcraft_conversations' in test_output_gen_batch.non_tensor_batch:
+                textcraft_conversation_list.append(test_output_gen_batch.non_tensor_batch['textcraft_conversations'])
+            if 'textcraft_data_idx' in test_output_gen_batch.non_tensor_batch:
+                textcraft_data_idx_list.append(test_output_gen_batch.non_tensor_batch['textcraft_data_idx'])
+            if 'textcraft_item_id' in test_output_gen_batch.non_tensor_batch:
+                textcraft_item_id_list.append(test_output_gen_batch.non_tensor_batch['textcraft_item_id'])
             # success rate
             for k in test_batch.non_tensor_batch.keys():
                 if 'success_rate' in k:
@@ -1107,6 +1116,9 @@ class RayPPOTrainer:
         called_models = np.concatenate(called_model_list, axis=0) if called_model_list else None
         api_costs = np.concatenate(api_cost_list, axis=0) if api_cost_list else None
         alfworld_tasks = np.concatenate(alfworld_task_list, axis=0) if alfworld_task_list else None
+        textcraft_conversations = np.concatenate(textcraft_conversation_list, axis=0) if textcraft_conversation_list else None
+        textcraft_data_idx = np.concatenate(textcraft_data_idx_list, axis=0) if textcraft_data_idx_list else None
+        textcraft_item_id = np.concatenate(textcraft_item_id_list, axis=0) if textcraft_item_id_list else None
         success_rate = {k: np.mean(v) for k, v in success_rate_dict.items()}
 
         # evaluate test_score based on data source
@@ -1173,6 +1185,9 @@ class RayPPOTrainer:
             success_per_traj=success_per_traj,
             alfworld_tasks=alfworld_tasks,
             api_costs=api_costs,
+            textcraft_conversations=textcraft_conversations,
+            textcraft_data_idx=textcraft_data_idx,
+            textcraft_item_id=textcraft_item_id,
         )
 
         # Dynamic Skill Bank Update (validation side): write to both val/train retrieval_memory.
@@ -1205,6 +1220,9 @@ class RayPPOTrainer:
         success_per_traj,
         alfworld_tasks=None,
         api_costs=None,
+        textcraft_conversations=None,
+        textcraft_data_idx=None,
+        textcraft_item_id=None,
     ) -> None:
         """Write compact fixed-model-eval style validation logs when explicitly enabled."""
         if not _as_bool(self.config.trainer.get("fixed_eval_style_logging", False)):
@@ -1224,6 +1242,16 @@ class RayPPOTrainer:
             unique_costs = np.asarray(api_costs, dtype=np.float32)[unique_idx]
         else:
             unique_costs = np.zeros(len(unique_idx), dtype=np.float32)
+
+        unique_textcraft_conversations = None
+        unique_textcraft_data_idx = None
+        unique_textcraft_item_id = None
+        if textcraft_conversations is not None:
+            unique_textcraft_conversations = np.asarray(textcraft_conversations, dtype=object)[unique_idx]
+        if textcraft_data_idx is not None:
+            unique_textcraft_data_idx = np.asarray(textcraft_data_idx, dtype=object)[unique_idx]
+        if textcraft_item_id is not None:
+            unique_textcraft_item_id = np.asarray(textcraft_item_id, dtype=object)[unique_idx]
 
         task_stats = defaultdict(lambda: {"success": 0, "total": 0, "api_cost": 0.0})
         per_env_results = {}
@@ -1282,6 +1310,34 @@ class RayPPOTrainer:
         result_path = os.path.join(save_dir, f"fixed_eval_validation_result_step{self.global_steps}.json")
         with open(result_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
+
+        if unique_textcraft_conversations is not None:
+            trajectory_dir = os.path.join(save_dir, "trajectories")
+            os.makedirs(trajectory_dir, exist_ok=True)
+            for i, conversation in enumerate(unique_textcraft_conversations):
+                won = bool(unique_success[i])
+                if unique_textcraft_item_id is not None:
+                    item_id = str(unique_textcraft_item_id[i])
+                elif unique_textcraft_data_idx is not None:
+                    item_id = f"textcraft_{unique_textcraft_data_idx[i]}"
+                else:
+                    item_id = f"textcraft_{i}"
+                data_idx = (
+                    int(unique_textcraft_data_idx[i])
+                    if unique_textcraft_data_idx is not None and str(unique_textcraft_data_idx[i]).strip().lstrip("-").isdigit()
+                    else None
+                )
+                payload = {
+                    "conversations": conversation,
+                    "item_id": item_id,
+                    "reward": 1 if won else 0,
+                    "success": 1 if won else 0,
+                }
+                if data_idx is not None:
+                    payload["data_idx"] = data_idx
+                trajectory_path = os.path.join(trajectory_dir, f"{item_id}.json")
+                with open(trajectory_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=4, ensure_ascii=False)
 
         log_path = os.path.join(save_dir, "fixed_eval_validation.log")
 
