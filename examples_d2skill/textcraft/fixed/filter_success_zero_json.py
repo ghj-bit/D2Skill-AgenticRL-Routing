@@ -4,9 +4,15 @@ import json
 from pathlib import Path
 
 
-DEFAULT_INPUT_DIR = (
-    "/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/"
-    "AgentGym-RL/AgentGym/agentenv/examples/basic/outputs/qwen3-8B_textcraft"
+DEFAULT_INPUT_DIRS = (
+    (
+        "/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/"
+        "AgentGym-RL/AgentGym/agentenv/examples/basic/outputs/qwen3-8B_textcraft"
+    ),
+    (
+        "/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/"
+        "AgentGym-RL/AgentGym/agentenv/examples/basic/outputs/deepseek_textcraft"
+    ),
 )
 
 
@@ -21,10 +27,10 @@ def main() -> int:
         description="List JSON files whose top-level success field is 0."
     )
     parser.add_argument(
-        "input_dir",
-        nargs="?",
-        default=DEFAULT_INPUT_DIR,
-        help=f"Directory containing JSON files. Default: {DEFAULT_INPUT_DIR}",
+        "input_dirs",
+        nargs="*",
+        default=None,
+        help=f"Directories containing JSON files. Default: {', '.join(DEFAULT_INPUT_DIRS)}",
     )
     parser.add_argument(
         "--recursive",
@@ -38,20 +44,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    input_dir = Path(args.input_dir)
-    if not input_dir.is_dir():
-        raise FileNotFoundError(f"Input directory does not exist: {input_dir}")
+    input_dirs = [Path(path) for path in (args.input_dirs or DEFAULT_INPUT_DIRS)]
+    for input_dir in input_dirs:
+        if not input_dir.is_dir():
+            raise FileNotFoundError(f"Input directory does not exist: {input_dir}")
 
     pattern = "**/*.json" if args.recursive else "*.json"
     matched = []
     failed = []
 
-    for path in sorted(input_dir.glob(pattern)):
-        try:
-            if is_success_zero(path):
-                matched.append(path)
-        except Exception as exc:
-            failed.append((path, exc))
+    for input_dir in input_dirs:
+        for path in sorted(input_dir.glob(pattern)):
+            try:
+                if is_success_zero(path):
+                    matched.append(path)
+            except Exception as exc:
+                failed.append((path, exc))
 
     for path in matched:
         print(path)
