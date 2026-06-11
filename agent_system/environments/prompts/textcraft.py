@@ -55,9 +55,10 @@ Reminder:
 
    in the command instead."""
 
-TEXTCRAFT_AGENTGYM_INITIAL_PROMPT = (
+TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE = (
     'You are given few useful crafting recipes to craft items in Minecraft. Crafting commands are of the format "craft [target object] using [input ingredients]".\n'
     'Every round I will give you an observation, you have to respond an action based on the state and instruction. You can "get" an object (ingredients) from the inventory or the environment, look-up the game inventory by "inventory", or "craft" (target) using any of the crafting commands.\n'
+    '{skills_prompt}'
     'Your output must strictly follow this format:"<think>\n'
     'your thoughts.\n'
     '\n'
@@ -72,6 +73,8 @@ TEXTCRAFT_AGENTGYM_INITIAL_PROMPT = (
     '3. You can use ONLY crafting commands provided, do not use your own crafting commands. However, if the crafting command uses a generic ingredient like "planks", you can use special types of the same ingredient e.g. "dark oak planks" in the command instead.\n'
     '\n'
 )
+
+TEXTCRAFT_AGENTGYM_INITIAL_PROMPT = TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE.format(skills_prompt="")
 
 TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT = "OK. I'll follow your instructions and try my best to solve the task."
 

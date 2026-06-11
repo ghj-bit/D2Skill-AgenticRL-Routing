@@ -1352,11 +1352,14 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         return bool(self.config.env.get("textcraft_agentgym_prompt", False))
 
     def _reset_agentgym_conversations(self, text_obs: List[str]):
+        initial_prompt = TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE.format(
+            skills_prompt=self.textcraft_fixed_skills_prompt
+        )
         self.agentgym_conversations = [
             [
-                {"role": "user", "content": TEXTCRAFT_AGENTGYM_INITIAL_PROMPT},
+                {"role": "user", "content": initial_prompt},
                 {"role": "assistant", "content": TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT},
-                {"role": "user", "content": self._append_textcraft_fixed_skills(obs)},
+                {"role": "user", "content": obs},
             ]
             for obs in text_obs
         ]
@@ -1392,11 +1395,6 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
                 ]
             )
         return "\n".join(lines)
-
-    def _append_textcraft_fixed_skills(self, content: str) -> str:
-        if not self.textcraft_fixed_skills_prompt:
-            return content
-        return f"{content}{self.textcraft_fixed_skills_prompt}"
 
     def _agentgym_chat_payload(self):
         if self.agentgym_conversations is None:
