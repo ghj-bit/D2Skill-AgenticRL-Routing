@@ -1458,7 +1458,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         if self._use_agentgym_prompt() and self.agentgym_conversations is not None:
             for i in range(min(len(text_obs), len(self.agentgym_conversations))):
                 self.agentgym_conversations[i].append({"role": "assistant", "content": text_actions[i]})
-                self.agentgym_conversations[i].append({"role": "user", "content": self._append_textcraft_fixed_skills(text_obs[i])})
+                self.agentgym_conversations[i].append({"role": "user", "content": text_obs[i]})
         self.memory.store(
             {
                 'text_obs': self.pre_text_obs,
