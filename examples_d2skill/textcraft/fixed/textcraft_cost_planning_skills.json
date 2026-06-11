@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Choose the Cheapest Crafting Chain First",
+    "principle": "For a crafting goal, enumerate every recipe path to the target item. Compute the primitive resources needed by each path recursively. Select the path requiring the fewest total resources and fix this plan before taking actions. Never switch crafting routes mid-execution. Track required and owned quantities after every craft.",
+    "when_to_apply": "Multi-step crafting tasks with alternative recipes."
+  },
+  {
+    "title": "Recipe-Tree Cost-Aware Planning",
+    "principle": "Before collecting or crafting anything, construct all valid recipe trees that can produce the target item. Estimate the total primitive resources required by each tree, including recursive ingredients. Select the branch with the lowest acquisition cost and commit to it before execution. During execution, maintain an explicit resource ledger and verify that every intermediate quantity satisfies future recipe requirements.",
+    "when_to_apply": "Whenever multiple crafting paths exist or the target requires more than one crafting step."
+  }
+]

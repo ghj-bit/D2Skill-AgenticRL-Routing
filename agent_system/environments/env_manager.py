@@ -19,6 +19,7 @@ import torch
 import numpy as np
 from functools import partial
 import os
+import json
 from agent_system.environments.prompts import *
 from agent_system.environments.base import EnvironmentManagerBase, to_numpy
 from agent_system.memory import SimpleMemory, SearchMemory
@@ -1343,6 +1344,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.memory = SimpleMemory()
         self.agentgym_conversations = None
         self.textcraft_data_indices = []
+        self.textcraft_fixed_skills_prompt = ""
         super().__init__(envs, projection_f, config)
 
     def _use_agentgym_prompt(self) -> bool:
@@ -1353,10 +1355,45 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             [
                 {"role": "user", "content": TEXTCRAFT_AGENTGYM_INITIAL_PROMPT},
                 {"role": "assistant", "content": TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT},
-                {"role": "user", "content": obs},
+                {"role": "user", "content": self._append_textcraft_fixed_skills(obs)},
             ]
             for obs in text_obs
         ]
+
+    def _load_textcraft_fixed_skills_prompt(self) -> str:
+        skills_path = str(self.config.env.get("textcraft_fixed_skills_json_path", "") or "").strip()
+        if not skills_path:
+            return ""
+        with open(skills_path, "r", encoding="utf-8") as f:
+            skills = json.load(f)
+        if not isinstance(skills, list):
+            raise ValueError(f"TextCraft fixed skills JSON must contain a list: {skills_path}")
+
+        selected = skills
+        raw_ids = self.config.env.get("textcraft_fixed_skill_ids", "")
+        if raw_ids not in (None, ""):
+            if isinstance(raw_ids, str):
+                selected_ids = [int(x.strip()) for x in raw_ids.split(",") if x.strip()]
+            else:
+                selected_ids = [int(x) for x in raw_ids]
+            selected = [skills[i] for i in selected_ids]
+
+        lines = ["", "", "Useful skills for this task:"]
+        for i, skill in enumerate(selected, start=1):
+            lines.extend(
+                [
+                    f"Skill {i}:",
+                    f"Title: {skill.get('title', '')}",
+                    f"Principle: {skill.get('principle', '')}",
+                    f"When to apply: {skill.get('when_to_apply', '')}",
+                ]
+            )
+        return "\n".join(lines)
+
+    def _append_textcraft_fixed_skills(self, content: str) -> str:
+        if not self.textcraft_fixed_skills_prompt:
+            return content
+        return f"{content}{self.textcraft_fixed_skills_prompt}"
 
     def _agentgym_chat_payload(self):
         if self.agentgym_conversations is None:
@@ -1400,9 +1437,11 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
         system_prompts = [TEXTCRAFT_SYSTEM_PROMPT] * len(text_obs)
         if self._use_agentgym_prompt():
+            self.textcraft_fixed_skills_prompt = self._load_textcraft_fixed_skills_prompt()
             self._reset_agentgym_conversations(text_obs)
         else:
             self.agentgym_conversations = None
+            self.textcraft_fixed_skills_prompt = ""
         observations = self._attach_textcraft_prompts(
             {'text': full_text_obs, 'image': None, 'anchor': text_obs},
             system_prompts,
@@ -1419,7 +1458,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         if self._use_agentgym_prompt() and self.agentgym_conversations is not None:
             for i in range(min(len(text_obs), len(self.agentgym_conversations))):
                 self.agentgym_conversations[i].append({"role": "assistant", "content": text_actions[i]})
-                self.agentgym_conversations[i].append({"role": "user", "content": text_obs[i]})
+                self.agentgym_conversations[i].append({"role": "user", "content": self._append_textcraft_fixed_skills(text_obs[i])})
         self.memory.store(
             {
                 'text_obs': self.pre_text_obs,
