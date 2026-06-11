@@ -1,10 +1,116 @@
 from __future__ import annotations
 
 import concurrent.futures
+import json
+import os
 from typing import Any, Dict, List
 
 import numpy as np
 import requests
+
+
+class _TextCraftDepthResolver:
+    def __init__(self, minecraft_dir: str):
+        try:
+            self._item_recipes = self._load_recipe_graph(minecraft_dir)
+            self._tag_recipes = self._build_tag_recipe_graph(self._item_recipes)
+            self._depth_cache = {}
+            item_depth_list = list(self._item_recipes_min_depth(1))
+            self._sorted_item_depth_list = sorted(item_depth_list, key=lambda x: x[1])
+        except Exception as exc:
+            self._error = exc
+            self._sorted_item_depth_list = []
+            return
+        self._error = None
+
+    def get_depth(self, data_idx: int):
+        if not self._sorted_item_depth_list:
+            return None
+        return self._sorted_item_depth_list[int(data_idx) % len(self._sorted_item_depth_list)][1]
+
+    def _load_recipe_graph(self, minecraft_dir: str) -> Dict[str, List[List[str]]]:
+        recipe_dir = os.path.join(minecraft_dir, "recipes")
+        if not os.path.isdir(recipe_dir):
+            raise FileNotFoundError(f"TextCraft recipes directory not found: {recipe_dir}")
+
+        item_recipes: Dict[str, List[List[str]]] = {}
+        for root, _dirs, files in os.walk(recipe_dir):
+            for filename in files:
+                if not filename.endswith(".json"):
+                    continue
+                recipe = self._parse_recipe(os.path.join(root, filename))
+                if recipe is None:
+                    continue
+                output, inputs = recipe
+                item_recipes.setdefault(output, []).append(inputs)
+        return item_recipes
+
+    def _parse_recipe(self, path: str):
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+
+        recipe_type = payload.get("type", "")
+        if not recipe_type.endswith("crafting_shaped") and not recipe_type.endswith("crafting_shapeless"):
+            return None
+
+        result = payload.get("result")
+        if isinstance(result, str):
+            output = result
+        elif isinstance(result, dict):
+            output = result.get("item") or result.get("id")
+        else:
+            output = None
+        if not output:
+            return None
+
+        ingredients = []
+        if recipe_type.endswith("crafting_shaped"):
+            ingredient_sources = (payload.get("key") or {}).values()
+        else:
+            ingredient_sources = payload.get("ingredients") or []
+        for ingredient in ingredient_sources:
+            ingredients.extend(self._parse_ingredient_names(ingredient))
+
+        return output, list(dict.fromkeys(ingredients))
+
+    def _parse_ingredient_names(self, ingredient) -> List[str]:
+        if isinstance(ingredient, list):
+            names = []
+            for item in ingredient:
+                names.extend(self._parse_ingredient_names(item))
+            return names
+        if not isinstance(ingredient, dict):
+            return []
+        if "item" in ingredient:
+            return [ingredient["item"]]
+        if "tag" in ingredient:
+            return [ingredient["tag"].split(":", 1)[-1]]
+        return []
+
+    def _build_tag_recipe_graph(self, item_recipes: Dict[str, List[List[str]]]) -> Dict[str, List[List[str]]]:
+        tag_recipes: Dict[str, List[List[str]]] = {}
+        for item, recipes in item_recipes.items():
+            tag_recipes.setdefault(item.split(":", 1)[-1], []).extend(recipes)
+        return tag_recipes
+
+    def _get_min_depth(self, item_or_tag: str) -> int:
+        if item_or_tag in self._depth_cache:
+            return self._depth_cache[item_or_tag]
+
+        self._depth_cache[item_or_tag] = 0
+        recipes = self._item_recipes.get(item_or_tag) or self._tag_recipes.get(item_or_tag)
+        if not recipes:
+            return 0
+
+        depth = min(max((self._get_min_depth(name) + 1 for name in recipe), default=1) for recipe in recipes)
+        self._depth_cache[item_or_tag] = depth
+        return depth
+
+    def _item_recipes_min_depth(self, min_depth: int):
+        for item in self._item_recipes:
+            depth = self._get_min_depth(item)
+            if depth >= min_depth:
+                yield item, depth
 
 
 class TextCraftHTTPClient:
@@ -12,7 +118,7 @@ class TextCraftHTTPClient:
         self,
         env_addr: str,
         timeout: int = 600,
-        minecraft_dir: str = "agentenv_textcraft/",
+        minecraft_dir: str = "/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym/agentenv-textcraft/agentenv_textcraft",
         commands: Any = None,
         goal: Any = None,
     ):
@@ -68,11 +174,12 @@ class TextCraftMultiProcessEnv:
         env_kwargs = env_kwargs or {}
         self.env_addr = env_kwargs.get("env_addr", "http://127.0.0.1:36005")
         self.timeout = int(env_kwargs.get("timeout", 600))
-        self.minecraft_dir = env_kwargs.get("minecraft_dir", "agentenv_textcraft/")
+        self.minecraft_dir = env_kwargs.get("minecraft_dir", "/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym/agentenv-textcraft/agentenv_textcraft")
         self.commands = env_kwargs.get("commands")
         self.goal = env_kwargs.get("goal")
         self.data_len = int(env_kwargs.get("data_len", 374))
         self.val_offset = int(env_kwargs.get("val_offset", 10000))
+        self._depth_resolver = None if self.commands is not None or self.goal is not None else _TextCraftDepthResolver(self.minecraft_dir)
         self._rng = np.random.RandomState(seed)
         self._reset_count = 0
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(self.num_processes, 256))
@@ -169,6 +276,10 @@ class TextCraftMultiProcessEnv:
             }
             if env_i < len(metadata) and "depth" in metadata[env_i]:
                 info["depth"] = metadata[env_i]["depth"]
+            elif self._depth_resolver is not None:
+                depth = self._depth_resolver.get_depth(idx)
+                if depth is not None:
+                    info["depth"] = depth
             info_list.append(info)
         return obs_list, info_list
 

@@ -1686,7 +1686,7 @@ def make_envs(config):
         env_kwargs = {
             'env_addr': config.env.textcraft.env_addr,
             'timeout': config.env.textcraft.get('timeout', 600),
-            'minecraft_dir': config.env.textcraft.get('minecraft_dir', 'agentenv_textcraft/'),
+            'minecraft_dir': config.env.textcraft.get('minecraft_dir', '/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym/agentenv-textcraft/agentenv_textcraft'),
             'commands': config.env.textcraft.get('commands', None),
             'goal': config.env.textcraft.get('goal', None),
             'data_len': config.env.textcraft.get('data_len', 374),

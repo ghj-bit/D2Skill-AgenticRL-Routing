@@ -16,7 +16,7 @@ Useful env vars:
   TEXTCRAFT_ENV_SERVER_URL=https://.../proxy/36001
   TEXTCRAFT_TRAIN_JSON=/path/to/textcraft_train.json
   TEXTCRAFT_VAL_JSON=/path/to/textcraft_test.json
-  TEXTCRAFT_MINECRAFT_DIR=agentenv_textcraft/
+  TEXTCRAFT_MINECRAFT_DIR=/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym/agentenv-textcraft/agentenv_textcraft
   TRAIN_DATA_SIZE=32 VAL_DATA_SIZE=32 GROUP_SIZE=8 TEXTCRAFT_MAX_STEPS=30
 EOF
 }
@@ -45,7 +45,7 @@ TEXTCRAFT_ENV_SERVER_URL="${TEXTCRAFT_ENV_SERVER_URL:-https://nat-notebook-inspi
 TEXTCRAFT_TIMEOUT="${TEXTCRAFT_TIMEOUT:-600}"
 TEXTCRAFT_DATA_LEN="${TEXTCRAFT_DATA_LEN:-374}"
 TEXTCRAFT_VAL_OFFSET="${TEXTCRAFT_VAL_OFFSET:-10000}"
-TEXTCRAFT_MINECRAFT_DIR="${TEXTCRAFT_MINECRAFT_DIR:-agentenv_textcraft/}"
+TEXTCRAFT_MINECRAFT_DIR="${TEXTCRAFT_MINECRAFT_DIR:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym/agentenv-textcraft/agentenv_textcraft}"
 TEXTCRAFT_COMMANDS="${TEXTCRAFT_COMMANDS:-null}"
 TEXTCRAFT_GOAL="${TEXTCRAFT_GOAL:-null}"
 TEXTCRAFT_TRAIN_JSON="${TEXTCRAFT_TRAIN_JSON:-/inspire/hdd/project/ai4education/qianhong-p-qianhong/ghj_workspace/AgentGym-RL/AgentGym-RL-Data-ID/train/textcraft_train.json}"
