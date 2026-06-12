@@ -14,7 +14,7 @@ fi
 COMMON_LOG_ROOT="${TEXTCRAFT_COMPARE_LOG_ROOT:-${PROJECT_DIR}/checkpoints}"
 NO_SKILLS_LOG_ROOT="${TEXTCRAFT_NO_SKILLS_LOG_ROOT:-${COMMON_LOG_ROOT}/verl_agent_textcraft_fixed_route}"
 SKILLS_LOG_ROOT="${TEXTCRAFT_SKILLS_LOG_ROOT:-${COMMON_LOG_ROOT}/verl_agent_textcraft_fixed_route_skills}"
-SKILL_IDS="${TEXTCRAFT_COMPARE_SKILL_IDS:-0,1}"
+SKILL_IDS="${TEXTCRAFT_COMPARE_SKILL_IDS:-0,1,2}"
 
 echo "[TextCraftCompare] Run 1/2: qwen3-8B without skills -> ${NO_SKILLS_LOG_ROOT}"
 LOG_ROOT="$NO_SKILLS_LOG_ROOT" \

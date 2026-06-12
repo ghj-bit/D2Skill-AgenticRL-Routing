@@ -1,12 +1,17 @@
 [
   {
-    "title": "Choose the Cheapest Crafting Chain First",
-    "principle": "For a crafting goal, enumerate every recipe path to the target item. Compute the primitive resources needed by each path recursively. Select the path requiring the fewest total resources and fix this plan before taking actions. Never switch crafting routes mid-execution. Track required and owned quantities after every craft.",
+    "title": "Plan the Cheapest Chain, Execute One Legal Step",
+    "principle": "For a crafting goal, reason about possible recipe chains and choose the chain with the lowest primitive-resource cost. Keep this chosen chain fixed while executing the task, and update the plan only when an observation proves that an assumed resource or intermediate item is unavailable.",
     "when_to_apply": "Multi-step crafting tasks with alternative recipes."
   },
   {
-    "title": "Recipe-Tree Cost-Aware Planning",
-    "principle": "Before collecting or crafting anything, construct all valid recipe trees that can produce the target item. Estimate the total primitive resources required by each tree, including recursive ingredients. Select the branch with the lowest acquisition cost and commit to it before execution. During execution, maintain an explicit resource ledger and verify that every intermediate quantity satisfies future recipe requirements.",
+    "title": "Recipe-Tree Ledger with Exact Commands",
+    "principle": "Before acting, track the target recipe tree, owned items, and missing ingredients. When a recipe produces more than the goal needs, craft the provided output quantity and treat extra items as inventory. During execution, maintain a resource ledger and verify that every intermediate quantity satisfies future recipe requirements.",
     "when_to_apply": "Whenever multiple crafting paths exist or the target requires more than one crafting step."
+  },
+  {
+    "title": "Avoid Invalid Batch Actions",
+    "principle": "A TextCraft action must be exactly one command. Valid get commands contain one item type only, such as get 6 quartz; never write get 6 quartz, 6 cobblestone. Valid craft commands must match a listed crafting command exactly, including the output count; never write craft 12 diorite if the listed command is craft 2 diorite using 2 quartz, 2 cobblestone. To make repeated quantities, execute the same valid command over multiple turns.",
+    "when_to_apply": "Every TextCraft step, especially after a failed action or when planning total resource requirements."
   }
 ]
