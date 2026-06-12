@@ -1,0 +1,1085 @@
+{
+  "global_step": 0,
+  "model": "deepseek-v3.2",
+  "env_num": 100,
+  "max_steps": 20,
+  "finished_envs": 100,
+  "overall_success_rate": 0.95,
+  "task_rates": {
+    "unknown": {
+      "success_rate": 0.95,
+      "success": 95,
+      "total": 100,
+      "api_cost": 0.2478139011946041,
+      "avg_api_cost": 0.0024781390119460412
+    }
+  },
+  "depth_rates": {
+    "1": {
+      "success_rate": 0.967741935483871,
+      "success": 30,
+      "total": 31,
+      "api_cost": 0.02553994787740521,
+      "avg_api_cost": 0.00082386928636791,
+      "avg_finished_step": 3.806451612903226,
+      "success_items": [
+        "textcraft_25",
+        "textcraft_22",
+        "textcraft_6",
+        "textcraft_1",
+        "textcraft_7",
+        "textcraft_18",
+        "textcraft_26",
+        "textcraft_10",
+        "textcraft_27",
+        "textcraft_16",
+        "textcraft_15",
+        "textcraft_4",
+        "textcraft_24",
+        "textcraft_0",
+        "textcraft_13",
+        "textcraft_21",
+        "textcraft_5",
+        "textcraft_12",
+        "textcraft_9",
+        "textcraft_17",
+        "textcraft_28",
+        "textcraft_2",
+        "textcraft_19",
+        "textcraft_29",
+        "textcraft_11",
+        "textcraft_8",
+        "textcraft_30",
+        "textcraft_3",
+        "textcraft_14",
+        "textcraft_23"
+      ],
+      "failed_items": [
+        "textcraft_20"
+      ]
+    },
+    "2": {
+      "success_rate": 0.975609756097561,
+      "success": 40,
+      "total": 41,
+      "api_cost": 0.08008761570090428,
+      "avg_api_cost": 0.0019533564805098605,
+      "avg_finished_step": 7.2926829268292686,
+      "success_items": [
+        "textcraft_147",
+        "textcraft_167",
+        "textcraft_149",
+        "textcraft_164",
+        "textcraft_152",
+        "textcraft_151",
+        "textcraft_177",
+        "textcraft_145",
+        "textcraft_176",
+        "textcraft_158",
+        "textcraft_159",
+        "textcraft_153",
+        "textcraft_178",
+        "textcraft_144",
+        "textcraft_154",
+        "textcraft_172",
+        "textcraft_150",
+        "textcraft_140",
+        "textcraft_170",
+        "textcraft_168",
+        "textcraft_174",
+        "textcraft_160",
+        "textcraft_141",
+        "textcraft_180",
+        "textcraft_171",
+        "textcraft_155",
+        "textcraft_162",
+        "textcraft_148",
+        "textcraft_173",
+        "textcraft_146",
+        "textcraft_157",
+        "textcraft_175",
+        "textcraft_166",
+        "textcraft_169",
+        "textcraft_165",
+        "textcraft_143",
+        "textcraft_161",
+        "textcraft_156",
+        "textcraft_163",
+        "textcraft_179"
+      ],
+      "failed_items": [
+        "textcraft_142"
+      ]
+    },
+    "3": {
+      "success_rate": 0.88,
+      "success": 22,
+      "total": 25,
+      "api_cost": 0.1243868216406554,
+      "avg_api_cost": 0.0049754728656262156,
+      "avg_finished_step": 12.8,
+      "success_items": [
+        "textcraft_430",
+        "textcraft_435",
+        "textcraft_431",
+        "textcraft_432",
+        "textcraft_441",
+        "textcraft_444",
+        "textcraft_426",
+        "textcraft_439",
+        "textcraft_428",
+        "textcraft_421",
+        "textcraft_437",
+        "textcraft_443",
+        "textcraft_433",
+        "textcraft_438",
+        "textcraft_440",
+        "textcraft_422",
+        "textcraft_434",
+        "textcraft_424",
+        "textcraft_427",
+        "textcraft_429",
+        "textcraft_436",
+        "textcraft_423"
+      ],
+      "failed_items": [
+        "textcraft_425",
+        "textcraft_420",
+        "textcraft_442"
+      ]
+    },
+    "4": {
+      "success_rate": 1.0,
+      "success": 3,
+      "total": 3,
+      "api_cost": 0.017799515975639224,
+      "avg_api_cost": 0.005933171991879742,
+      "avg_finished_step": 15.333333333333334,
+      "success_items": [
+        "textcraft_533",
+        "textcraft_534",
+        "textcraft_535"
+      ],
+      "failed_items": []
+    }
+  },
+  "api_cost": {
+    "total": 0.2478138953447342,
+    "avg_per_traj": 0.0024781390093266964
+  },
+  "per_env_results": {
+    "0": {
+      "traj_uid": "008a532f-ba67-4cce-a079-19654cb25565",
+      "item_id": "textcraft_430",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 13,
+      "api_cost": 0.004768973682075739
+    },
+    "1": {
+      "traj_uid": "019fe5c8-3962-4d29-9a33-9dce47ca8a9f",
+      "item_id": "textcraft_25",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0003785039880312979
+    },
+    "2": {
+      "traj_uid": "036be376-6344-4eb4-833d-4663cfc7a2c4",
+      "item_id": "textcraft_147",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0015538320876657963
+    },
+    "3": {
+      "traj_uid": "042b086d-c289-4169-a885-c9f868396e52",
+      "item_id": "textcraft_425",
+      "won": false,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 20,
+      "api_cost": 0.010128132998943329
+    },
+    "4": {
+      "traj_uid": "04cdcdd8-6980-4b68-8a7a-de05d49cf4ed",
+      "item_id": "textcraft_435",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 14,
+      "api_cost": 0.006471486296504736
+    },
+    "5": {
+      "traj_uid": "06fa317c-ef05-4380-b862-96ce368cd84f",
+      "item_id": "textcraft_167",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.0013759199064224958
+    },
+    "6": {
+      "traj_uid": "079feb89-9ec1-4166-9444-391767078484",
+      "item_id": "textcraft_149",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 15,
+      "api_cost": 0.004171733744442463
+    },
+    "7": {
+      "traj_uid": "0a7f359b-7788-4f47-9997-eede461bebb9",
+      "item_id": "textcraft_431",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 9,
+      "api_cost": 0.002579346066340804
+    },
+    "8": {
+      "traj_uid": "0b5ec75a-e404-46ee-b5b2-3fdba9d5e66a",
+      "item_id": "textcraft_164",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 8,
+      "api_cost": 0.0014308560639619827
+    },
+    "9": {
+      "traj_uid": "0b922478-220f-4fa0-8872-915f58b2732c",
+      "item_id": "textcraft_152",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.0011505059665068984
+    },
+    "10": {
+      "traj_uid": "0e18c20a-4831-4b12-97d8-09caab50dca0",
+      "item_id": "textcraft_151",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0013776839477941394
+    },
+    "11": {
+      "traj_uid": "120c7c88-56b4-4398-8709-15abf9ed35f6",
+      "item_id": "textcraft_177",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 10,
+      "api_cost": 0.00304403412155807
+    },
+    "12": {
+      "traj_uid": "1289fa00-a0bc-4f4f-a023-8b9090f3f2f5",
+      "item_id": "textcraft_533",
+      "won": true,
+      "task": "unknown",
+      "depth": "4",
+      "finished_step": 18,
+      "api_cost": 0.006800597533583641
+    },
+    "13": {
+      "traj_uid": "141adadc-ebf8-4ded-aca3-4b2b32d839b2",
+      "item_id": "textcraft_145",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0014004899421706796
+    },
+    "14": {
+      "traj_uid": "142933da-55b0-43c4-ac9a-53374cf8a6fb",
+      "item_id": "textcraft_22",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00040849202196113765
+    },
+    "15": {
+      "traj_uid": "1900cd99-02a4-43ae-84f5-7b5f1fe9442e",
+      "item_id": "textcraft_176",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.0014173740055412054
+    },
+    "16": {
+      "traj_uid": "19d10f86-1050-4026-bdf2-6f3b59410193",
+      "item_id": "textcraft_6",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004145400016568601
+    },
+    "17": {
+      "traj_uid": "1c1c971f-ad2d-45d9-bff8-b088b550730b",
+      "item_id": "textcraft_158",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0010698660043999553
+    },
+    "18": {
+      "traj_uid": "20792042-68c5-4eb2-b10e-500c0466afa9",
+      "item_id": "textcraft_159",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 16,
+      "api_cost": 0.0052108559757471085
+    },
+    "19": {
+      "traj_uid": "27f062da-bc3e-4fd9-a1ad-c44a949e529f",
+      "item_id": "textcraft_20",
+      "won": false,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 20,
+      "api_cost": 0.009279143996536732
+    },
+    "20": {
+      "traj_uid": "2a9127c9-c5b0-4fc3-b9bd-24b4f847cf69",
+      "item_id": "textcraft_432",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 8,
+      "api_cost": 0.0025793458335101604
+    },
+    "21": {
+      "traj_uid": "2bfbce8a-8737-4f16-9a13-a1beb9478289",
+      "item_id": "textcraft_441",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 8,
+      "api_cost": 0.00242361007258296
+    },
+    "22": {
+      "traj_uid": "2cc14049-9545-4d51-ad55-8da850db55f5",
+      "item_id": "textcraft_153",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0010833479464054108
+    },
+    "23": {
+      "traj_uid": "2eba24e5-478d-481f-a7f4-4bf3a6dd4814",
+      "item_id": "textcraft_178",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 8,
+      "api_cost": 0.002334275981411338
+    },
+    "24": {
+      "traj_uid": "33244374-a84c-42f4-9b71-6121a23152c0",
+      "item_id": "textcraft_144",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.0013177080545574427
+    },
+    "25": {
+      "traj_uid": "334b820d-021a-4bef-81cb-7c985896209e",
+      "item_id": "textcraft_154",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0008869140292517841
+    },
+    "26": {
+      "traj_uid": "3472500b-e23c-4be8-b06c-5c28481cd902",
+      "item_id": "textcraft_444",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 10,
+      "api_cost": 0.0037322458811104298
+    },
+    "27": {
+      "traj_uid": "382af230-77f1-4faa-9b68-a58f976258b0",
+      "item_id": "textcraft_426",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 12,
+      "api_cost": 0.00414262805134058
+    },
+    "28": {
+      "traj_uid": "387ca718-e28f-4fb8-812a-0aece9ba37b7",
+      "item_id": "textcraft_1",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004203359712846577
+    },
+    "29": {
+      "traj_uid": "3a6cc58e-9e8d-4bda-85e6-58b1c04ee76a",
+      "item_id": "textcraft_7",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004505760152824223
+    },
+    "30": {
+      "traj_uid": "3aeecb6f-761a-4ebe-8ff4-ac5e528b1ec0",
+      "item_id": "textcraft_18",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 4,
+      "api_cost": 0.0007462979992851615
+    },
+    "31": {
+      "traj_uid": "3d60c8b0-351c-4db1-b4fa-6117907dc00b",
+      "item_id": "textcraft_172",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0012981779873371124
+    },
+    "32": {
+      "traj_uid": "3e13f599-352c-45d0-88a7-90ff0b1b471d",
+      "item_id": "textcraft_26",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0005823720130138099
+    },
+    "33": {
+      "traj_uid": "3f600e9c-8903-4cfd-b19c-f59686c3ff79",
+      "item_id": "textcraft_439",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 13,
+      "api_cost": 0.005480874329805374
+    },
+    "34": {
+      "traj_uid": "49b23201-e8b2-49ae-ab2b-4f744f211463",
+      "item_id": "textcraft_150",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.001314810011535883
+    },
+    "35": {
+      "traj_uid": "4ba16512-6f1f-49c8-95fa-f61792984a93",
+      "item_id": "textcraft_10",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00036565199843607843
+    },
+    "36": {
+      "traj_uid": "4e797d7f-f616-422b-9bda-8a3c2649cd3b",
+      "item_id": "textcraft_27",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.000478421978186816
+    },
+    "37": {
+      "traj_uid": "4fad3df5-ca2f-495b-912b-6d183b15b0a2",
+      "item_id": "textcraft_140",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 13,
+      "api_cost": 0.00397164560854435
+    },
+    "38": {
+      "traj_uid": "561c02f4-8751-48e9-b6f7-414a071ca8c2",
+      "item_id": "textcraft_16",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0007892639841884375
+    },
+    "39": {
+      "traj_uid": "57293a7c-6ef4-4170-a4b3-f9caba0b8a73",
+      "item_id": "textcraft_428",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 7,
+      "api_cost": 0.0019701358396559954
+    },
+    "40": {
+      "traj_uid": "57af916c-928f-4d82-9b8d-07fca94c9154",
+      "item_id": "textcraft_170",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 9,
+      "api_cost": 0.00223914603702724
+    },
+    "41": {
+      "traj_uid": "6320da46-5727-4285-b412-df4883520fc7",
+      "item_id": "textcraft_168",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 11,
+      "api_cost": 0.003841236000880599
+    },
+    "42": {
+      "traj_uid": "664e736d-4272-42f6-85ff-53703e5d3a63",
+      "item_id": "textcraft_174",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 8,
+      "api_cost": 0.0015067079802975059
+    },
+    "43": {
+      "traj_uid": "687635e8-939d-46d8-9eca-40b07bcdc5bc",
+      "item_id": "textcraft_160",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0011464739218354225
+    },
+    "44": {
+      "traj_uid": "6b310c42-0ead-48dd-bb69-b242e12a57d0",
+      "item_id": "textcraft_15",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00039173400728031993
+    },
+    "45": {
+      "traj_uid": "6ca9ddb3-243e-4699-bdd8-3c91cccdc880",
+      "item_id": "textcraft_4",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 4,
+      "api_cost": 0.0005641019670292735
+    },
+    "46": {
+      "traj_uid": "6fc2c08d-23b5-43e7-8506-6700318e6f40",
+      "item_id": "textcraft_421",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 12,
+      "api_cost": 0.0035179199185222387
+    },
+    "47": {
+      "traj_uid": "702c93ee-15a1-479d-86a6-d2ab64ee5b66",
+      "item_id": "textcraft_24",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0008707859669812024
+    },
+    "48": {
+      "traj_uid": "7305afae-9919-40a7-a3ec-ad8535c58863",
+      "item_id": "textcraft_0",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0003885839832946658
+    },
+    "49": {
+      "traj_uid": "74f5da83-7673-47d1-9ee4-4acfdc103535",
+      "item_id": "textcraft_420",
+      "won": false,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 20,
+      "api_cost": 0.010987073183059692
+    },
+    "50": {
+      "traj_uid": "76fdc71b-29be-4493-bfe9-72312e3a0e3f",
+      "item_id": "textcraft_141",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0012889800127595663
+    },
+    "51": {
+      "traj_uid": "799c1818-700e-41f0-be7a-3d635bbf11aa",
+      "item_id": "textcraft_13",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0007537319324910641
+    },
+    "52": {
+      "traj_uid": "79a63a8a-65e4-4b79-94e0-7c578d0a7ac2",
+      "item_id": "textcraft_180",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 11,
+      "api_cost": 0.004401683807373047
+    },
+    "53": {
+      "traj_uid": "7dd93b62-0fea-4f73-9038-0f5cdf29049f",
+      "item_id": "textcraft_171",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0008967419853433967
+    },
+    "54": {
+      "traj_uid": "7e71c303-401e-4121-9e0c-17a914d45f77",
+      "item_id": "textcraft_21",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 4,
+      "api_cost": 0.0006253379979170859
+    },
+    "55": {
+      "traj_uid": "7e8c9787-9a58-4786-a39e-25a9d5ebc482",
+      "item_id": "textcraft_155",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 7,
+      "api_cost": 0.001623762072995305
+    },
+    "56": {
+      "traj_uid": "7ed1ba31-5024-4737-bd57-268c65ef9bfb",
+      "item_id": "textcraft_162",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 7,
+      "api_cost": 0.0013752900995314121
+    },
+    "57": {
+      "traj_uid": "80316304-850a-4779-81ee-dde7fd76a143",
+      "item_id": "textcraft_437",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 13,
+      "api_cost": 0.004908204078674316
+    },
+    "58": {
+      "traj_uid": "82137b1f-e7dd-4f0f-b59d-d29de4ef6cb1",
+      "item_id": "textcraft_148",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.001358909998089075
+    },
+    "59": {
+      "traj_uid": "821f951a-2ba1-4eba-9ae0-d40c785f413f",
+      "item_id": "textcraft_5",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 4,
+      "api_cost": 0.000715175992809236
+    },
+    "60": {
+      "traj_uid": "822ccd00-7a1a-413f-aeb4-46caad917eff",
+      "item_id": "textcraft_173",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0011649959487840533
+    },
+    "61": {
+      "traj_uid": "85427f7a-158c-43c4-9b75-967dadc729ba",
+      "item_id": "textcraft_146",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 10,
+      "api_cost": 0.002660364145413041
+    },
+    "62": {
+      "traj_uid": "87622efb-1abe-4b51-8595-35f7d9a689ab",
+      "item_id": "textcraft_12",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004500719951465726
+    },
+    "63": {
+      "traj_uid": "8bdd3ae0-1463-4426-b434-a63f9086b28e",
+      "item_id": "textcraft_9",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00038593800854869187
+    },
+    "64": {
+      "traj_uid": "8d076712-7103-4f3d-914c-cdae14aa3312",
+      "item_id": "textcraft_17",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00033213599817827344
+    },
+    "65": {
+      "traj_uid": "8e60c6af-da5a-40f1-8f93-776a6f4231b0",
+      "item_id": "textcraft_157",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0014962500426918268
+    },
+    "66": {
+      "traj_uid": "919ed8f0-83fc-491e-a7d4-1f8055e74f0a",
+      "item_id": "textcraft_28",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004281479923520237
+    },
+    "67": {
+      "traj_uid": "931bfdf6-7ab1-4a0d-afb1-059cba4c46c5",
+      "item_id": "textcraft_2",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 7,
+      "api_cost": 0.0017263260670006275
+    },
+    "68": {
+      "traj_uid": "958804a7-553a-43c9-ae88-b62b79f6d316",
+      "item_id": "textcraft_443",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 11,
+      "api_cost": 0.003592259716242552
+    },
+    "69": {
+      "traj_uid": "980ba68f-a1dc-4575-8727-4a7c5ee9d248",
+      "item_id": "textcraft_175",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 4,
+      "api_cost": 0.0006917399587109685
+    },
+    "70": {
+      "traj_uid": "99bcb164-2e28-47e6-a0f9-57049a6996dd",
+      "item_id": "textcraft_442",
+      "won": false,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 20,
+      "api_cost": 0.00695079006254673
+    },
+    "71": {
+      "traj_uid": "9ae8b68b-f58d-4b18-a90d-5614a82d4fe5",
+      "item_id": "textcraft_19",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00046166402171365917
+    },
+    "72": {
+      "traj_uid": "a6b6fa61-809c-4f2a-9d46-88893c89d46a",
+      "item_id": "textcraft_534",
+      "won": true,
+      "task": "unknown",
+      "depth": "4",
+      "finished_step": 10,
+      "api_cost": 0.0030934258829802275
+    },
+    "73": {
+      "traj_uid": "ad616812-e9bd-4ff7-ba07-7540a993b85d",
+      "item_id": "textcraft_166",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 7,
+      "api_cost": 0.001482138060964644
+    },
+    "74": {
+      "traj_uid": "adc9d94b-5b88-4fbb-85ca-cdc9352e4112",
+      "item_id": "textcraft_535",
+      "won": true,
+      "task": "unknown",
+      "depth": "4",
+      "finished_step": 18,
+      "api_cost": 0.007905492559075356
+    },
+    "75": {
+      "traj_uid": "b09feba2-c9aa-4756-902d-ec323e618cdc",
+      "item_id": "textcraft_169",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.0017997840186581016
+    },
+    "76": {
+      "traj_uid": "b35eade5-4f5e-4c62-b51d-56966039d7a8",
+      "item_id": "textcraft_165",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 4,
+      "api_cost": 0.0006858179694972932
+    },
+    "77": {
+      "traj_uid": "b4e84333-7cfc-4387-a7e6-925b18f4366b",
+      "item_id": "textcraft_433",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 12,
+      "api_cost": 0.003758579958230257
+    },
+    "78": {
+      "traj_uid": "b9ddcb08-fd47-41a1-9fc6-7c5daeb0a572",
+      "item_id": "textcraft_29",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00039349799044430256
+    },
+    "79": {
+      "traj_uid": "bb35e4a9-0c95-439c-9817-8134abc2af00",
+      "item_id": "textcraft_143",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 4,
+      "api_cost": 0.0007387379882857203
+    },
+    "80": {
+      "traj_uid": "bd1377e9-0c10-4d29-99b9-ef416c3e295a",
+      "item_id": "textcraft_438",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 13,
+      "api_cost": 0.004232717677950859
+    },
+    "81": {
+      "traj_uid": "bff74ac4-d07f-47b2-8135-b713d71b989c",
+      "item_id": "textcraft_440",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 14,
+      "api_cost": 0.004887036047875881
+    },
+    "82": {
+      "traj_uid": "c285774e-08f0-4bc4-8008-81bf4293be12",
+      "item_id": "textcraft_161",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 5,
+      "api_cost": 0.0009932579705491662
+    },
+    "83": {
+      "traj_uid": "c33f8dde-b365-4153-98ab-0463156a25b9",
+      "item_id": "textcraft_11",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.00033024599542841315
+    },
+    "84": {
+      "traj_uid": "c6391129-4ffa-4ba8-ab60-92af76ef45b4",
+      "item_id": "textcraft_422",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 12,
+      "api_cost": 0.004723992198705673
+    },
+    "85": {
+      "traj_uid": "c8e1c9e5-2716-413e-83fa-84836c7aaccb",
+      "item_id": "textcraft_8",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004260060377418995
+    },
+    "86": {
+      "traj_uid": "c9e19ece-1ca7-43cd-84a8-14ef93bdd092",
+      "item_id": "textcraft_30",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0003787559980992228
+    },
+    "87": {
+      "traj_uid": "cdf42116-9371-45cb-9c13-c9f1d64a3fc9",
+      "item_id": "textcraft_434",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 19,
+      "api_cost": 0.009547397494316101
+    },
+    "88": {
+      "traj_uid": "d0105967-de8e-4a9b-aa04-69de263ce857",
+      "item_id": "textcraft_3",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0004039559862576425
+    },
+    "89": {
+      "traj_uid": "d084becf-2d8d-4655-b8cf-669acac5d9f3",
+      "item_id": "textcraft_142",
+      "won": false,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 20,
+      "api_cost": 0.0060061682015657425
+    },
+    "90": {
+      "traj_uid": "d4a66eb1-6d6f-41d3-b0c9-8eb30c8a9498",
+      "item_id": "textcraft_156",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 4,
+      "api_cost": 0.0007667099707759917
+    },
+    "91": {
+      "traj_uid": "d5b7605d-af4d-4afb-ac7a-a0b92ab3cc03",
+      "item_id": "textcraft_14",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0008188739884644747
+    },
+    "92": {
+      "traj_uid": "da207185-512e-404f-be00-f1722c30f741",
+      "item_id": "textcraft_163",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 6,
+      "api_cost": 0.001661562011577189
+    },
+    "93": {
+      "traj_uid": "db66c384-3e74-4c75-b37a-1983ea5bb327",
+      "item_id": "textcraft_424",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 9,
+      "api_cost": 0.0024246179964393377
+    },
+    "94": {
+      "traj_uid": "de65a440-b62c-49b3-ac78-1b25c871339c",
+      "item_id": "textcraft_427",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 10,
+      "api_cost": 0.004147667903453112
+    },
+    "95": {
+      "traj_uid": "e064a407-c7e8-442e-a07a-5283069249e0",
+      "item_id": "textcraft_429",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 12,
+      "api_cost": 0.003798648016527295
+    },
+    "96": {
+      "traj_uid": "e228d4d7-56fd-4512-8206-631fd40e98c3",
+      "item_id": "textcraft_23",
+      "won": true,
+      "task": "unknown",
+      "depth": "1",
+      "finished_step": 3,
+      "api_cost": 0.0003812759823631495
+    },
+    "97": {
+      "traj_uid": "ef98404e-3e51-4529-bdb9-4d3c44a6476f",
+      "item_id": "textcraft_179",
+      "won": true,
+      "task": "unknown",
+      "depth": "2",
+      "finished_step": 11,
+      "api_cost": 0.004851126112043858
+    },
+    "98": {
+      "traj_uid": "f75c6ce7-4427-44e3-ac44-6fa68bd2ea5a",
+      "item_id": "textcraft_436",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 14,
+      "api_cost": 0.006192900240421295
+    },
+    "99": {
+      "traj_uid": "f9217780-795e-4abf-85d0-818a62f334aa",
+      "item_id": "textcraft_423",
+      "won": true,
+      "task": "unknown",
+      "depth": "3",
+      "finished_step": 15,
+      "api_cost": 0.00644023809581995
+    }
+  },
+  "metrics": {
+    "val/textcraft/test_score": 9.196306488066341,
+    "val/textcraft/tool_call_count/mean": 0.0,
+    "val/success_rate": 0.95,
+    "val/success_length/mean": 7.189473628997803,
+    "val/success_length/count": 95.0,
+    "val/model_call/qwen3-8B/mean": 0.0,
+    "val/model_call/deepseek/mean": 7.83,
+    "val/model_call/qwen3-30B/mean": 0.0,
+    "val/model_call/total/mean": 7.83,
+    "val/token_cost_per_traj/mean": 0.0024781390119460412,
+    "val/token_cost_per_traj/count": 100.0
+  }
+}

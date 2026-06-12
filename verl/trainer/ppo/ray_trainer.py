@@ -22,6 +22,7 @@ import json
 import os
 import re
 import random
+import time
 import uuid
 from collections import defaultdict
 from contextlib import contextmanager
@@ -826,6 +827,7 @@ class RayPPOTrainer:
         self.validation_generations_logger.log(self.config.trainer.logger, samples, self.global_steps)
 
     def _validate(self):
+        validation_start_time = time.time()
         # Train/val share the same retrieval_memory (including post-eviction state)
         # so validation never reads an outdated bank while train has already updated it.
         som_cfg = self.config.env.get("skills_only_memory") or {}
@@ -1193,6 +1195,7 @@ class RayPPOTrainer:
             textcraft_data_idx=textcraft_data_idx,
             textcraft_item_id=textcraft_item_id,
             textcraft_depth=textcraft_depth,
+            elapsed_seconds=time.time() - validation_start_time,
         )
 
         # Dynamic Skill Bank Update (validation side): write to both val/train retrieval_memory.
@@ -1229,6 +1232,7 @@ class RayPPOTrainer:
         textcraft_data_idx=None,
         textcraft_item_id=None,
         textcraft_depth=None,
+        elapsed_seconds=None,
     ) -> None:
         """Write compact fixed-model-eval style validation logs when explicitly enabled."""
         if not _as_bool(self.config.trainer.get("fixed_eval_style_logging", False)):
@@ -1366,6 +1370,7 @@ class RayPPOTrainer:
             "env_num": int(len(unique_idx)),
             "max_steps": int(self.config.env.max_steps),
             "finished_envs": int(len(unique_idx)),
+            "elapsed_seconds": float(elapsed_seconds) if elapsed_seconds is not None else None,
             "overall_success_rate": overall_success,
             "task_rates": task_rates,
             "depth_rates": depth_rates,
@@ -1430,8 +1435,10 @@ class RayPPOTrainer:
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
 
+        elapsed_part = f"elapsed_seconds={float(elapsed_seconds):.2f}; " if elapsed_seconds is not None else ""
         _fixed_eval_log(
             f"[FixedEval] Validation overall success: {overall_success:.4f}; "
+            f"{elapsed_part}"
             f"result file: {result_path}"
         )
         for task, item in task_rates.items():
