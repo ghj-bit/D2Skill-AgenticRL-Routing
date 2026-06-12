@@ -27,3 +27,5 @@ test_nvidia_api.py
 /agent_system/environments/alfworld_envs.py
 trace.json
 trace_*.json
+verl_agent_textcraft_fixed_route
+*.zip
