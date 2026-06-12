@@ -21,17 +21,18 @@ run_experiment() {
     local skill_ids="$3"
     shift 3
 
-    local log_root="${PREEXP_ROOT}/${name}"
-    local summary_json="${log_root}/fixed_route_metric_summary.json"
+    local model_log_dir="${PREEXP_ROOT}/${name}"
+    local summary_json="${model_log_dir}/fixed_route_metric_summary.json"
 
     echo "============================================================"
     echo "[TextCraftPreExp] start ${name}"
-    echo "[TextCraftPreExp] runs=${RUNS} base_seed=${BASE_SEED} skills='${skill_ids}' log_root=${log_root}"
+    echo "[TextCraftPreExp] runs=${RUNS} base_seed=${BASE_SEED} skills='${skill_ids}' model_log_dir=${model_log_dir}"
     echo "============================================================"
 
     RUNS="${RUNS}" \
     BASE_SEED="${BASE_SEED}" \
-    LOG_ROOT="${log_root}" \
+    LOG_ROOT="${PREEXP_ROOT}" \
+    MODEL_LOG_DIR="${model_log_dir}" \
     SUMMARY_JSON="${summary_json}" \
     TEXTCRAFT_FIXED_SKILLS_JSON_PATH="${SKILLS_JSON}" \
     TEXTCRAFT_FIXED_SKILL_IDS="${skill_ids}" \
