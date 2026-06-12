@@ -1,4 +1,4 @@
-# Copyright 2025 Nanyang Technological University (NTU), Singapore
+﻿# Copyright 2025 Nanyang Technological University (NTU), Singapore
 # and the verl-agent (GiGPO) team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1365,38 +1365,49 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             if self._textcraft_output_format() == "tagged"
             else TEXTCRAFT_AGENTGYM_ACTION_LABEL_INITIAL_PROMPT_TEMPLATE
         )
-        initial_prompt = template.format(
-            skills_prompt=self.textcraft_fixed_skills_prompt
-        )
+        prompts = self.textcraft_fixed_skills_prompts or [self.textcraft_fixed_skills_prompt] * len(text_obs)
         self.agentgym_conversations = [
             [
-                {"role": "user", "content": initial_prompt},
+                {"role": "user", "content": template.format(skills_prompt=prompts[i] if i < len(prompts) else "")},
                 {"role": "assistant", "content": TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT},
                 {"role": "user", "content": obs},
             ]
-            for obs in text_obs
+            for i, obs in enumerate(text_obs)
         ]
 
-    def _load_textcraft_fixed_skills_prompt(self) -> str:
+    def _use_textcraft_fixed_skills_by_task_id(self) -> bool:
+        return bool(self.config.env.get("textcraft_fixed_skills_by_task_id", False))
+
+    def _load_textcraft_fixed_skills(self) -> List[Dict[str, Any]]:
         skills_path = str(self.config.env.get("textcraft_fixed_skills_json_path", "") or "").strip()
         if not skills_path:
-            return ""
+            return []
         with open(skills_path, "r", encoding="utf-8") as f:
-            skills = json.load(f)
-        if not isinstance(skills, list):
-            raise ValueError(f"TextCraft fixed skills JSON must contain a list: {skills_path}")
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            skills = []
+            for key in ("task_skills", "step_skills", "skills"):
+                value = data.get(key, [])
+                if isinstance(value, list):
+                    skills.extend(value)
+            return skills
+        raise ValueError(f"TextCraft fixed skills JSON must contain a list or skill dict: {skills_path}")
 
+    def _select_textcraft_fixed_skills_by_ids(self, skills: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         raw_ids = self.config.env.get("textcraft_fixed_skill_ids", "")
         if raw_ids in (None, ""):
-            return ""
+            return skills if self._use_textcraft_fixed_skills_by_task_id() else []
         if isinstance(raw_ids, str):
             selected_ids = [int(x.strip()) for x in raw_ids.split(",") if x.strip()]
         else:
             selected_ids = [int(x) for x in raw_ids]
-        if not selected_ids:
-            return ""
-        selected = [skills[i] for i in selected_ids]
+        return [skills[i] for i in selected_ids if 0 <= i < len(skills)]
 
+    def _format_textcraft_fixed_skills_prompt(self, selected: List[Dict[str, Any]]) -> str:
+        if not selected:
+            return ""
         lines = ["", "", "Useful skills for this task:"]
         for i, skill in enumerate(selected, start=1):
             lines.extend(
@@ -1408,6 +1419,25 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
                 ]
             )
         return "\n".join(lines)
+
+    def _load_textcraft_fixed_skills_prompt(self) -> str:
+        skills = self._select_textcraft_fixed_skills_by_ids(self._load_textcraft_fixed_skills())
+        return self._format_textcraft_fixed_skills_prompt(skills)
+
+    def _load_textcraft_fixed_skills_prompts_by_task_id(self) -> List[str]:
+        skills = self._select_textcraft_fixed_skills_by_ids(self._load_textcraft_fixed_skills())
+        skills_by_task_id: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for skill in skills:
+            source_task_id = skill.get("source_task_id")
+            if source_task_id in (None, ""):
+                continue
+            skills_by_task_id[str(source_task_id)].append(skill)
+
+        prompts = []
+        for i, data_idx in enumerate(self.textcraft_data_indices):
+            task_id = str(int(data_idx)) if isinstance(data_idx, (int, float)) and not isinstance(data_idx, bool) else str(data_idx)
+            prompts.append(self._format_textcraft_fixed_skills_prompt(skills_by_task_id.get(task_id, [])))
+        return prompts
 
     def _agentgym_chat_payload(self):
         if self.agentgym_conversations is None:
@@ -1454,11 +1484,17 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
         system_prompts = [TEXTCRAFT_SYSTEM_PROMPT] * len(text_obs)
         if self._use_agentgym_prompt():
-            self.textcraft_fixed_skills_prompt = self._load_textcraft_fixed_skills_prompt()
+            if self._use_textcraft_fixed_skills_by_task_id():
+                self.textcraft_fixed_skills_prompt = ""
+                self.textcraft_fixed_skills_prompts = self._load_textcraft_fixed_skills_prompts_by_task_id()
+            else:
+                self.textcraft_fixed_skills_prompt = self._load_textcraft_fixed_skills_prompt()
+                self.textcraft_fixed_skills_prompts = []
             self._reset_agentgym_conversations(text_obs)
         else:
             self.agentgym_conversations = None
             self.textcraft_fixed_skills_prompt = ""
+            self.textcraft_fixed_skills_prompts = []
         observations = self._attach_textcraft_prompts(
             {'text': full_text_obs, 'image': None, 'anchor': text_obs},
             system_prompts,
@@ -1677,7 +1713,7 @@ def make_envs(config):
     elif "webshop" in config.env.env_name.lower():
         from agent_system.environments.env_package.webshop import build_webshop_envs, webshop_projection
         print("[WebShop] Initializing WebShop envs (each worker loads products + Lucene index). "
-              "Small dataset (~1k products): ~30s–2min per worker; full dataset: longer. Look for 'Products loaded.' / 'Loaded N goals.'")
+              "Small dataset (~1k products): ~30s鈥?min per worker; full dataset: longer. Look for 'Products loaded.' / 'Loaded N goals.'")
         if config.env.webshop.use_small:
             file_path = os.path.join(os.path.dirname(__file__), 'env_package/webshop/webshop/data/items_shuffle_1000.json')
             attr_path = os.path.join(os.path.dirname(__file__), 'env_package/webshop/webshop/data/items_ins_v2_1000.json')
@@ -1750,3 +1786,4 @@ def make_envs(config):
     else:
         print("Environment not supported")
         exit(1)
+

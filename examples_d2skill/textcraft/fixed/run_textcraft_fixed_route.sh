@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +23,10 @@ export TEXTCRAFT_MAX_STEPS="${TEXTCRAFT_MAX_STEPS:-20}"
 export TEXTCRAFT_HISTORY_LENGTH="${TEXTCRAFT_HISTORY_LENGTH:-20}"
 export TEXTCRAFT_STOP_DONE_TRAJECTORIES="${TEXTCRAFT_STOP_DONE_TRAJECTORIES:-1}"
 export TEXTCRAFT_OUTPUT_FORMAT="${TEXTCRAFT_OUTPUT_FORMAT:-tagged}"
+export TEXTCRAFT_USE_FIXED_SKILLS="${TEXTCRAFT_USE_FIXED_SKILLS:-0}"
+export TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID="${TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID:-0}"
+export TEXTCRAFT_FIXED_SKILLS_JSON_PATH="${TEXTCRAFT_FIXED_SKILLS_JSON_PATH:-${SCRIPT_DIR}/distilled_model_gap_skills/distilled_textcraft_model_gap_skills.json}"
+export TEXTCRAFT_FIXED_SKILL_IDS="${TEXTCRAFT_FIXED_SKILL_IDS:-}"
 RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 FIXED_TEXTCRAFT_OUTPUT_DIR="verl_agent_textcraft_fixed_route"
@@ -52,6 +56,13 @@ fi
 
 mkdir -p "$MODEL_LOG_DIR"
 
+SKILL_ARGS=()
+if [[ "$TEXTCRAFT_USE_FIXED_SKILLS" == "1" || "$TEXTCRAFT_USE_FIXED_SKILLS" == "true" ]]; then
+    SKILL_ARGS+=(+env.textcraft_fixed_skills_json_path="$TEXTCRAFT_FIXED_SKILLS_JSON_PATH")
+    SKILL_ARGS+=(+env.textcraft_fixed_skills_by_task_id="$TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID")
+    SKILL_ARGS+=("+env.textcraft_fixed_skill_ids='${TEXTCRAFT_FIXED_SKILL_IDS}'")
+fi
+
 for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     seed=$((BASE_SEED + run_idx))
     log_path="${MODEL_LOG_DIR}/seed_${seed}.log"
@@ -63,7 +74,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         continue
     fi
 
-    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} output_format=${TEXTCRAFT_OUTPUT_FORMAT} stop_done_trajectories=${TEXTCRAFT_STOP_DONE_TRAJECTORIES} val_data_size=${VAL_DATA_SIZE} val_item_ids=${TEXTCRAFT_VAL_ITEM_IDS:-all} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
+    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} output_format=${TEXTCRAFT_OUTPUT_FORMAT} stop_done_trajectories=${TEXTCRAFT_STOP_DONE_TRAJECTORIES} val_data_size=${VAL_DATA_SIZE} val_item_ids=${TEXTCRAFT_VAL_ITEM_IDS:-all} use_skills=${TEXTCRAFT_USE_FIXED_SKILLS} skills_by_task_id=${TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID} skills_json=${TEXTCRAFT_FIXED_SKILLS_JSON_PATH} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
     bash "${EXAMPLES_DIR}/run_textcraft_d2skill_gigpo.sh" "$ENGINE" \
         routing.force_model_enable=True \
         routing.force_model_name="$FIXED_ROUTE_MODEL" \
@@ -88,9 +99,11 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         trainer.project_name="$FIXED_TEXTCRAFT_OUTPUT_DIR" \
         trainer.experiment_name="$experiment_name" \
         trainer.default_local_dir="$trainer_output_dir" \
+        "${SKILL_ARGS[@]}" \
         "$@" \
         2>&1 | tee "$log_path"
 done
 
 python3 "${SCRIPT_DIR}/aggregate_textcraft_fixed_eval_results.py" "$MODEL_LOG_DIR" \
     --json-out "$SUMMARY_JSON"
+

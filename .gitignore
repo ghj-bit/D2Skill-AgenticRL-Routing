@@ -29,3 +29,4 @@ trace.json
 trace_*.json
 verl_agent_textcraft_fixed_route
 *.zip
+*.json
