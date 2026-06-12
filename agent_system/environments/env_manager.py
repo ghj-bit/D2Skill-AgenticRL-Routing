@@ -1346,10 +1346,14 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.textcraft_data_indices = []
         self.textcraft_depths = []
         self.textcraft_fixed_skills_prompt = ""
+        self.textcraft_done_flags = []
         super().__init__(envs, projection_f, config)
 
     def _use_agentgym_prompt(self) -> bool:
         return bool(self.config.env.get("textcraft_agentgym_prompt", False))
+
+    def _stop_done_textcraft_trajectories(self) -> bool:
+        return bool(self.config.env.get("textcraft_stop_done_trajectories", False))
 
     def _reset_agentgym_conversations(self, text_obs: List[str]):
         initial_prompt = TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE.format(
@@ -1435,6 +1439,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.tasks = [info.get("goal") or self.extract_task(obs) for obs, info in zip(text_obs, infos)]
         self.textcraft_data_indices = [info.get("data_idx", i) for i, info in enumerate(infos)]
         self.textcraft_depths = [info.get("depth") for info in infos]
+        self.textcraft_done_flags = [False] * len(text_obs)
         self.pre_text_obs = text_obs
 
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=True)
@@ -1457,11 +1462,25 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
 
     def step(self, text_actions: List[str], models: List[str] = []):
         actions, valids = self.projection_f(text_actions)
+        textcraft_active_before_step = [
+            not self.textcraft_done_flags[i] if i < len(self.textcraft_done_flags) else True
+            for i in range(len(actions))
+        ]
         text_obs, rewards, dones, infos = self.envs.step(actions)
         if self._use_agentgym_prompt() and self.agentgym_conversations is not None:
             for i in range(min(len(text_obs), len(self.agentgym_conversations))):
+                if (
+                    self._stop_done_textcraft_trajectories()
+                    and i < len(textcraft_active_before_step)
+                    and not textcraft_active_before_step[i]
+                ):
+                    continue
                 self.agentgym_conversations[i].append({"role": "assistant", "content": text_actions[i]})
                 self.agentgym_conversations[i].append({"role": "user", "content": text_obs[i]})
+        if self.textcraft_done_flags:
+            for i, done in enumerate(dones):
+                if i < len(self.textcraft_done_flags):
+                    self.textcraft_done_flags[i] = self.textcraft_done_flags[i] or bool(done)
         self.memory.store(
             {
                 'text_obs': self.pre_text_obs,

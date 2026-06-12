@@ -706,7 +706,7 @@ class TrajectoryCollector:
                 route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
             # print(f'路由器输出：{route_actions_str}')
             cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success, model_call_elapsed_seconds = self.execute_predictions(
-                route_actions_str, original_obs
+                route_actions_str, original_obs, active_mask=active_masks
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
             model_call_success = np.array(model_call_success, dtype=bool)
@@ -992,7 +992,7 @@ class TrajectoryCollector:
         
         return gen_batch_output
     
-    def execute_predictions(self, predictions: List[str], original_obs: Dict, do_route=True) -> List[str]:
+    def execute_predictions(self, predictions: List[str], original_obs: Dict, do_route=True, active_mask=None) -> List[str]:
         """
         Execute predictions across multiple environments.
         NOTE: the function is the actual `step` function in the environment
@@ -1010,12 +1010,21 @@ class TrajectoryCollector:
         #但现在只有model
         contexts = original_obs.get('text', None)
         forced_route_model = self._get_forced_route_model()
+        if active_mask is None:
+            active_mask = [True] * len(predictions)
+        else:
+            active_mask = [bool(x) for x in active_mask]
         if forced_route_model:
             cur_actions = ['search'] * len(predictions)
             contents = [forced_route_model] * len(predictions)
             route_format_valids = [True] * len(predictions)
         else:
             cur_actions, contents, route_format_valids = self.postprocess_predictions(predictions)
+        for idx, is_active in enumerate(active_mask):
+            if not is_active:
+                cur_actions[idx] = ''
+                contents[idx] = ''
+                route_format_valids[idx] = True
         # print(f"contents: {contents}")
         cur_completion_tokens = []
         # 构造agent的content
