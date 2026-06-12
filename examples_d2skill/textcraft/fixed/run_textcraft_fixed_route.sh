@@ -22,6 +22,7 @@ export TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION="${TEXTCRAFT_FIXED_GPU_MEMORY_UTIL
 export TEXTCRAFT_MAX_STEPS="${TEXTCRAFT_MAX_STEPS:-20}"
 export TEXTCRAFT_HISTORY_LENGTH="${TEXTCRAFT_HISTORY_LENGTH:-20}"
 export TEXTCRAFT_STOP_DONE_TRAJECTORIES="${TEXTCRAFT_STOP_DONE_TRAJECTORIES:-1}"
+export TEXTCRAFT_OUTPUT_FORMAT="${TEXTCRAFT_OUTPUT_FORMAT:-agentgym}"
 RUNS="${RUNS:-1}"
 BASE_SEED="${BASE_SEED:-0}"
 FIXED_TEXTCRAFT_OUTPUT_DIR="verl_agent_textcraft_fixed_route"
@@ -57,7 +58,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
     experiment_name="fixed_${FIXED_ROUTE_MODEL}_seed${seed}"
     trainer_output_dir="${MODEL_LOG_DIR}/${experiment_name}"
 
-    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} stop_done_trajectories=${TEXTCRAFT_STOP_DONE_TRAJECTORIES} val_data_size=${VAL_DATA_SIZE} val_item_ids=${TEXTCRAFT_VAL_ITEM_IDS:-all} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
+    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} output_format=${TEXTCRAFT_OUTPUT_FORMAT} stop_done_trajectories=${TEXTCRAFT_STOP_DONE_TRAJECTORIES} val_data_size=${VAL_DATA_SIZE} val_item_ids=${TEXTCRAFT_VAL_ITEM_IDS:-all} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
     bash "${EXAMPLES_DIR}/run_textcraft_d2skill_gigpo.sh" "$ENGINE" \
         routing.force_model_enable=True \
         routing.force_model_name="$FIXED_ROUTE_MODEL" \
@@ -65,6 +66,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         env.history_length="$TEXTCRAFT_HISTORY_LENGTH" \
         +env.textcraft_agentgym_prompt=True \
         +env.textcraft_stop_done_trajectories="$TEXTCRAFT_STOP_DONE_TRAJECTORIES" \
+        +env.textcraft_output_format="$TEXTCRAFT_OUTPUT_FORMAT" \
         env.seed="$seed" \
         +env.val_seed="$((seed + 1))" \
         trainer.val_only=True \

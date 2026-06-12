@@ -1355,8 +1355,17 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
     def _stop_done_textcraft_trajectories(self) -> bool:
         return bool(self.config.env.get("textcraft_stop_done_trajectories", False))
 
+    def _textcraft_output_format(self) -> str:
+        output_format = str(self.config.env.get("textcraft_output_format", "agentgym") or "agentgym").strip().lower()
+        return "tagged" if output_format in {"tagged", "xml", "think_action"} else "agentgym"
+
     def _reset_agentgym_conversations(self, text_obs: List[str]):
-        initial_prompt = TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE.format(
+        template = (
+            TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE
+            if self._textcraft_output_format() == "tagged"
+            else TEXTCRAFT_AGENTGYM_ACTION_LABEL_INITIAL_PROMPT_TEMPLATE
+        )
+        initial_prompt = template.format(
             skills_prompt=self.textcraft_fixed_skills_prompt
         )
         self.agentgym_conversations = [
@@ -1557,10 +1566,15 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
 
         for i in range(len(text_obs)):
             task_description = self.tasks[i] if i < len(self.tasks) else self.extract_task(text_obs[i])
+            output_instruction = (
+                TEXTCRAFT_OUTPUT_INSTRUCTION
+                if self._textcraft_output_format() == "tagged"
+                else TEXTCRAFT_ACTION_LABEL_OUTPUT_INSTRUCTION
+            )
             if init or self.config.env.history_length <= 0:
                 obs = TEXTCRAFT_TEMPLATE_NO_HIS.format(
                     current_observation=text_obs[i],
-                    output_instruction=TEXTCRAFT_OUTPUT_INSTRUCTION,
+                    output_instruction=output_instruction,
                 )
                 route_history = ""
                 step_count = 0
@@ -1573,7 +1587,7 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
                     action_history=memory_contexts[i],
                     current_step=len(self.memory[i]) + 1,
                     current_observation=text_obs[i],
-                    output_instruction=TEXTCRAFT_OUTPUT_INSTRUCTION,
+                    output_instruction=output_instruction,
                 )
                 route_history = self._build_routing_history(i, valid_lens[i])
                 step_count = len(self.memory[i])
@@ -1727,8 +1741,10 @@ def make_envs(config):
             env_kwargs=env_kwargs,
             resources_per_worker=resources_per_worker,
         )
-        envs = TextCraftEnvironmentManager(_envs, partial(textcraft_projection), config)
-        val_envs = TextCraftEnvironmentManager(_val_envs, partial(textcraft_projection), config)
+        textcraft_output_format = config.env.get("textcraft_output_format", "agentgym")
+        projection_f = partial(textcraft_projection, output_format=textcraft_output_format)
+        envs = TextCraftEnvironmentManager(_envs, projection_f, config)
+        val_envs = TextCraftEnvironmentManager(_val_envs, projection_f, config)
         val_envs.val_rollout_always_skills = True
         return envs, val_envs
     else:
