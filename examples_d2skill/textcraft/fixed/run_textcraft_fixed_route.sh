@@ -92,7 +92,5 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         2>&1 | tee "$log_path"
 done
 
-python3 "${EXAMPLES_DIR}/alfworld/fixed/aggregate_fixed_route_metrics.py" "$LOG_ROOT" \
-    --json-out "$SUMMARY_JSON" \
-    --wandb-name "fixed_${FIXED_ROUTE_MODEL}_3x_summary" \
-    --no-wandb
+python3 "${SCRIPT_DIR}/aggregate_textcraft_fixed_eval_results.py" "$MODEL_LOG_DIR" \
+    --json-out "$SUMMARY_JSON"
