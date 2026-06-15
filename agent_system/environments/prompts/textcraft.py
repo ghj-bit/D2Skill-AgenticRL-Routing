@@ -69,9 +69,6 @@ TEXTCRAFT_AGENTGYM_TAGGED_OUTPUT_FORMAT = (
     '<action>\n'
     'your next action\n'
     '</action>"\n'
-    'The content inside <think> must be at most 256 tokens.\n'
-    'More than 256 tokens is invalid.\n'
-    '\n'
 )
 
 TEXTCRAFT_AGENTGYM_ACTION_LABEL_OUTPUT_FORMAT = (
