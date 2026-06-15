@@ -14,6 +14,7 @@ RUNS="${RUNS:-1}"
 BASE_SEED="${BASE_SEED:-0}"
 PREEXP_ROOT="${PREEXP_ROOT:-${PROJECT_DIR}/checkpoints/verl_agent_textcraft_fixed_route_manual_skills_5x3}"
 SKILLS_JSON="${TEXTCRAFT_FIXED_SKILLS_JSON_PATH:-${SCRIPT_DIR}/textcraft_cost_planning_skills.json}"
+QWEN3_8B_ALL_SEEDS_FAILED_TASK_IDS="${TEXTCRAFT_FIXED_SKILLS_TASK_IDS:-149,152,168,420,421,422,423,425,429,431,433,434,439,442,443,533,535}"
 
 run_experiment() {
     local name="$1"
@@ -24,11 +25,18 @@ run_experiment() {
 
     local model_log_dir="${PREEXP_ROOT}/${name}"
     local summary_json="${model_log_dir}/fixed_route_metric_summary.json"
+    local skills_by_task_id="0"
+    local skills_task_ids=""
+    if [[ "${use_skills}" == "1" || "${use_skills}" == "true" ]]; then
+        skills_by_task_id="1"
+        skills_task_ids="${QWEN3_8B_ALL_SEEDS_FAILED_TASK_IDS}"
+    fi
 
     echo "============================================================"
     echo "[TextCraftManualSkills5x3] start ${name}"
     echo "[TextCraftManualSkills5x3] model=${model_name} runs=${RUNS} base_seed=${BASE_SEED} use_skills=${use_skills} skill_ids='${skill_ids}'"
     echo "[TextCraftManualSkills5x3] skills_json=${SKILLS_JSON}"
+    echo "[TextCraftManualSkills5x3] skills_by_task_id=${skills_by_task_id} skills_task_ids=${skills_task_ids:-none}"
     echo "[TextCraftManualSkills5x3] model_log_dir=${model_log_dir}"
     echo "============================================================"
 
@@ -39,9 +47,14 @@ run_experiment() {
     MODEL_LOG_DIR="${model_log_dir}" \
     SUMMARY_JSON="${summary_json}" \
     TEXTCRAFT_USE_FIXED_SKILLS="${use_skills}" \
-    TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID="0" \
+    TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID="${skills_by_task_id}" \
     TEXTCRAFT_FIXED_SKILLS_JSON_PATH="${SKILLS_JSON}" \
     TEXTCRAFT_FIXED_SKILL_IDS="${skill_ids}" \
+    TEXTCRAFT_FIXED_SKILLS_TASK_IDS="${skills_task_ids}" \
+    TEXTCRAFT_AGENT_PROMPT_STYLE="${TEXTCRAFT_AGENT_PROMPT_STYLE:-agentgym}" \
+    TEXTCRAFT_HISTORY_LENGTH="${TEXTCRAFT_HISTORY_LENGTH:-0}" \
+    TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK="${TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK:-1}" \
+    ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-512}" \
     bash "${SCRIPT_DIR}/run_textcraft_fixed_route.sh" "${ENGINE_ARGS[@]}" "$@"
 }
 
@@ -79,3 +92,6 @@ echo "============================================================"
 echo "[TextCraftManualSkills5x3] all experiments finished"
 echo "[TextCraftManualSkills5x3] root=${PREEXP_ROOT}"
 echo "============================================================"
+
+
+

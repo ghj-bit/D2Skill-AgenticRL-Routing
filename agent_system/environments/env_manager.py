@@ -420,6 +420,7 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 'routed_model_output': text_actions,
             }
         )
+
         self.pre_text_obs = text_obs
 
         query_texts = None
@@ -1350,16 +1351,65 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         self.textcraft_done_flags = []
         super().__init__(envs, projection_f, config)
 
+    def _textcraft_bool(self, key: str, default: bool = False) -> bool:
+        value = self.config.env.get(key, default)
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(value)
+
     def _use_agentgym_prompt(self) -> bool:
-        return bool(self.config.env.get("textcraft_agentgym_prompt", False))
+        return self._textcraft_bool("textcraft_agentgym_prompt", False)
 
     def _stop_done_textcraft_trajectories(self) -> bool:
-        return bool(self.config.env.get("textcraft_stop_done_trajectories", False))
+        return self._textcraft_bool("textcraft_stop_done_trajectories", False)
 
     def _textcraft_output_format(self) -> str:
         output_format = str(self.config.env.get("textcraft_output_format", "agentgym") or "agentgym").strip().lower()
         return "tagged" if output_format in {"tagged", "xml", "think_action"} else "agentgym"
 
+    def _textcraft_agent_prompt_style(self) -> str:
+        style = str(self.config.env.get("textcraft_agent_prompt_style", "agentgym") or "agentgym").strip().lower()
+        return "alfworld" if style in {"alfworld", "memory", "history"} else "agentgym"
+
+    def _format_textcraft_agent_history_from_memory(self, env_idx: int, history_length: int) -> Tuple[str, int]:
+        if history_length <= 0 or env_idx >= len(self.memory):
+            return "", 0
+        recent = self.memory[env_idx][-history_length:]
+        valid_len = len(recent)
+        start_idx = len(self.memory[env_idx]) - valid_len
+        lines = []
+        for j, record in enumerate(recent):
+            step_num = start_idx + j + 1
+            obs = record.get("text_obs", "")
+            action = record.get("action", "")
+            lines.append(f"Observation {step_num}: {obs}\nAction {step_num}: {action}")
+        return "\n\n".join(lines), valid_len
+
+    def _format_textcraft_agent_user_prompt(self, env_idx: int, current_observation: str, init: bool = False) -> str:
+        output_instruction = (
+            TEXTCRAFT_OUTPUT_INSTRUCTION
+            if self._textcraft_output_format() == "tagged"
+            else TEXTCRAFT_ACTION_LABEL_OUTPUT_INSTRUCTION
+        )
+        if init:
+            return TEXTCRAFT_TEMPLATE_NO_HIS.format(
+                current_observation=current_observation,
+                output_instruction=output_instruction,
+            )
+
+        history_length = self._agentgym_history_length()
+        action_history, valid_history_length = self._format_textcraft_agent_history_from_memory(env_idx, history_length)
+        task_description = self.tasks[env_idx] if env_idx < len(self.tasks) else self.extract_task(current_observation)
+        step_count = len(self.memory[env_idx]) if env_idx < len(self.memory) else 0
+        return TEXTCRAFT_TEMPLATE_WITH_HISTORY.format(
+            task_description=task_description,
+            step_count=step_count,
+            history_length=valid_history_length,
+            action_history=action_history,
+            current_step=step_count + 1,
+            current_observation=current_observation,
+            output_instruction=output_instruction,
+        )
     def _reset_agentgym_conversations(self, text_obs: List[str]):
         template = (
             TEXTCRAFT_AGENTGYM_INITIAL_PROMPT_TEMPLATE
@@ -1367,17 +1417,22 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             else TEXTCRAFT_AGENTGYM_ACTION_LABEL_INITIAL_PROMPT_TEMPLATE
         )
         prompts = self.textcraft_fixed_skills_prompts or [self.textcraft_fixed_skills_prompt] * len(text_obs)
-        self.agentgym_conversations = [
-            [
-                {"role": "user", "content": template.format(skills_prompt=prompts[i] if i < len(prompts) else "")},
-                {"role": "assistant", "content": TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT},
-                {"role": "user", "content": obs},
-            ]
-            for i, obs in enumerate(text_obs)
-        ]
-
+        self.agentgym_conversations = []
+        for i, obs in enumerate(text_obs):
+            task_user_prompt = (
+                self._format_textcraft_agent_user_prompt(i, obs, init=True)
+                if self._textcraft_agent_prompt_style() == "alfworld"
+                else obs
+            )
+            self.agentgym_conversations.append(
+                [
+                    {"role": "user", "content": template.format(skills_prompt=prompts[i] if i < len(prompts) else "")},
+                    {"role": "assistant", "content": TEXTCRAFT_AGENTGYM_ASSISTANT_PROMPT},
+                    {"role": "user", "content": task_user_prompt},
+                ]
+            )
     def _use_textcraft_fixed_skills_by_task_id(self) -> bool:
-        return bool(self.config.env.get("textcraft_fixed_skills_by_task_id", False))
+        return self._textcraft_bool("textcraft_fixed_skills_by_task_id", False)
 
     def _load_textcraft_fixed_skills(self) -> List[Dict[str, Any]]:
         skills_path = str(self.config.env.get("textcraft_fixed_skills_json_path", "") or "").strip()
@@ -1425,26 +1480,44 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
         skills = self._select_textcraft_fixed_skills_by_ids(self._load_textcraft_fixed_skills())
         return self._format_textcraft_fixed_skills_prompt(skills)
 
+    def _textcraft_fixed_skills_task_id_filter(self) -> set:
+        raw_task_ids = self.config.env.get("textcraft_fixed_skills_task_ids", "")
+        if raw_task_ids in (None, ""):
+            return set()
+        if isinstance(raw_task_ids, str):
+            return {x.strip().replace("textcraft_", "") for x in raw_task_ids.split(",") if x.strip()}
+        return {str(x).strip().replace("textcraft_", "") for x in raw_task_ids if str(x).strip()}
+
     def _load_textcraft_fixed_skills_prompts_by_task_id(self) -> List[str]:
         skills = self._select_textcraft_fixed_skills_by_ids(self._load_textcraft_fixed_skills())
+        task_id_filter = self._textcraft_fixed_skills_task_id_filter()
+        if task_id_filter:
+            prompts = []
+            for data_idx in self.textcraft_data_indices:
+                task_id = str(int(data_idx)) if isinstance(data_idx, (int, float)) and not isinstance(data_idx, bool) else str(data_idx)
+                task_id = task_id.replace("textcraft_", "")
+                prompts.append(self._format_textcraft_fixed_skills_prompt(skills if task_id in task_id_filter else []))
+            return prompts
+
         skills_by_task_id: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for skill in skills:
             source_task_id = skill.get("source_task_id")
             if source_task_id in (None, ""):
                 continue
-            skills_by_task_id[str(source_task_id)].append(skill)
+            skills_by_task_id[str(source_task_id).replace("textcraft_", "")].append(skill)
 
         prompts = []
         for i, data_idx in enumerate(self.textcraft_data_indices):
             task_id = str(int(data_idx)) if isinstance(data_idx, (int, float)) and not isinstance(data_idx, bool) else str(data_idx)
+            task_id = task_id.replace("textcraft_", "")
             prompts.append(self._format_textcraft_fixed_skills_prompt(skills_by_task_id.get(task_id, [])))
         return prompts
 
     def _trim_textcraft_assistant_history(self) -> bool:
-        keep_full = bool(self.config.env.get("textcraft_keep_full_assistant_history_include_think", False))
+        keep_full = self._textcraft_bool("textcraft_keep_full_assistant_history_include_think", False)
         if keep_full:
             return False
-        return bool(self.config.env.get("textcraft_trim_assistant_history", True))
+        return self._textcraft_bool("textcraft_trim_assistant_history", True)
 
     def _assistant_action_only_content(self, content: Any) -> str:
         text = str(content or "")
@@ -1458,17 +1531,37 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             return f"<action>\n{action}\n</action>"
         return text.strip()
 
+    def _agentgym_history_length(self) -> int:
+        try:
+            return int(self.config.env.get("history_length", 0) or 0)
+        except Exception:
+            return 0
+
+    def _limit_agentgym_obs_history(self, conversation: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        history_length = self._agentgym_history_length()
+        if history_length <= 0 or len(conversation) <= 3:
+            return [dict(message) for message in conversation]
+        # Preserve the first three prompt messages: instruction, acknowledgement,
+        # and initial observation. Then keep only the latest obs/action turns.
+        prefix = [dict(message) for message in conversation[:3]]
+        tail_messages = max(history_length * 2, 0)
+        tail = [dict(message) for message in conversation[3:][-tail_messages:]] if tail_messages else []
+        return prefix + tail
+
     def _agentgym_chat_payload(self):
         if self.agentgym_conversations is None:
             return None
-        if not self._trim_textcraft_assistant_history():
-            return [[dict(message) for message in conversation] for conversation in self.agentgym_conversations]
 
         payload = []
         for conversation in self.agentgym_conversations:
+            limited_conversation = self._limit_agentgym_obs_history(conversation)
+            if not self._trim_textcraft_assistant_history():
+                payload.append(limited_conversation)
+                continue
+
             assistant_seen = 0
             trimmed_conversation = []
-            for message in conversation:
+            for message in limited_conversation:
                 copied = dict(message)
                 if copied.get("role") == "assistant":
                     # Keep the fixed initial acknowledgement. For actual history turns,
@@ -1557,7 +1650,6 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
                 ):
                     continue
                 self.agentgym_conversations[i].append({"role": "assistant", "content": text_actions[i]})
-                self.agentgym_conversations[i].append({"role": "user", "content": text_obs[i]})
         if self.textcraft_done_flags:
             for i, done in enumerate(dones):
                 if i < len(self.textcraft_done_flags):
@@ -1571,6 +1663,20 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
                 'routed_model_output': text_actions,
             }
         )
+        if self._use_agentgym_prompt() and self.agentgym_conversations is not None:
+            for i in range(min(len(text_obs), len(self.agentgym_conversations))):
+                if (
+                    self._stop_done_textcraft_trajectories()
+                    and i < len(textcraft_active_before_step)
+                    and not textcraft_active_before_step[i]
+                ):
+                    continue
+                next_user_prompt = (
+                    self._format_textcraft_agent_user_prompt(i, text_obs[i], init=False)
+                    if self._textcraft_agent_prompt_style() == "alfworld"
+                    else text_obs[i]
+                )
+                self.agentgym_conversations[i].append({"role": "user", "content": next_user_prompt})
         self.pre_text_obs = text_obs
 
         full_text_obs, route_text_obs = self.build_text_obs(text_obs, init=False)
@@ -1822,6 +1928,12 @@ def make_envs(config):
     else:
         print("Environment not supported")
         exit(1)
+
+
+
+
+
+
 
 
 

@@ -15,19 +15,21 @@ export TEXTCRAFT_VAL_ITEM_IDS="${TEXTCRAFT_VAL_ITEM_IDS:-}"
 export VAL_DATA_SIZE="${VAL_DATA_SIZE:-100}"
 # export VAL_DATA_SIZE="${VAL_DATA_SIZE:-1}"
 export MAX_CONCURRENCY="${MAX_CONCURRENCY:-32}"
-export ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-256}"
+export ROUTING_LLM_MAX_TOKENS="${ROUTING_LLM_MAX_TOKENS:-4096}"
 export ROUTING_LLM_TEMPERATURE="${ROUTING_LLM_TEMPERATURE:-1.0}"
 export ROUTING_LLM_TOP_P="${ROUTING_LLM_TOP_P:-1}"
 export TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION="${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION:-0.3}"
 export TEXTCRAFT_MAX_STEPS="${TEXTCRAFT_MAX_STEPS:-20}"
-export TEXTCRAFT_HISTORY_LENGTH="${TEXTCRAFT_HISTORY_LENGTH:-20}"
+export TEXTCRAFT_HISTORY_LENGTH="${TEXTCRAFT_HISTORY_LENGTH:-0}"
 export TEXTCRAFT_STOP_DONE_TRAJECTORIES="${TEXTCRAFT_STOP_DONE_TRAJECTORIES:-1}"
 export TEXTCRAFT_OUTPUT_FORMAT="${TEXTCRAFT_OUTPUT_FORMAT:-tagged}"
-export TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK="${TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK:-0}"
+export TEXTCRAFT_AGENT_PROMPT_STYLE="${TEXTCRAFT_AGENT_PROMPT_STYLE:-agentgym}"
+export TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK="${TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK:-1}"
 export TEXTCRAFT_USE_FIXED_SKILLS="${TEXTCRAFT_USE_FIXED_SKILLS:-0}"
 export TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID="${TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID:-0}"
 export TEXTCRAFT_FIXED_SKILLS_JSON_PATH="${TEXTCRAFT_FIXED_SKILLS_JSON_PATH:-${SCRIPT_DIR}/distilled_model_gap_skills/distilled_textcraft_model_gap_skills.json}"
 export TEXTCRAFT_FIXED_SKILL_IDS="${TEXTCRAFT_FIXED_SKILL_IDS:-}"
+export TEXTCRAFT_FIXED_SKILLS_TASK_IDS="${TEXTCRAFT_FIXED_SKILLS_TASK_IDS:-}"
 RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 FIXED_TEXTCRAFT_OUTPUT_DIR="verl_agent_textcraft_fixed_route"
@@ -61,6 +63,7 @@ SKILL_ARGS=()
 if [[ "$TEXTCRAFT_USE_FIXED_SKILLS" == "1" || "$TEXTCRAFT_USE_FIXED_SKILLS" == "true" ]]; then
     SKILL_ARGS+=(+env.textcraft_fixed_skills_json_path="$TEXTCRAFT_FIXED_SKILLS_JSON_PATH")
     SKILL_ARGS+=(+env.textcraft_fixed_skills_by_task_id="$TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID")
+    SKILL_ARGS+=(+env.textcraft_fixed_skills_task_ids="$TEXTCRAFT_FIXED_SKILLS_TASK_IDS")
     SKILL_ARGS+=("+env.textcraft_fixed_skill_ids='${TEXTCRAFT_FIXED_SKILL_IDS}'")
 fi
 
@@ -75,7 +78,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         continue
     fi
 
-    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} output_format=${TEXTCRAFT_OUTPUT_FORMAT} keep_full_assistant_history_include_think=${TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK} stop_done_trajectories=${TEXTCRAFT_STOP_DONE_TRAJECTORIES} val_data_size=${VAL_DATA_SIZE} val_item_ids=${TEXTCRAFT_VAL_ITEM_IDS:-all} use_skills=${TEXTCRAFT_USE_FIXED_SKILLS} skills_by_task_id=${TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID} skills_json=${TEXTCRAFT_FIXED_SKILLS_JSON_PATH} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
+    echo "[TextCraftFixedRoute3x] model=${FIXED_ROUTE_MODEL} seed=${seed} max_steps=${TEXTCRAFT_MAX_STEPS} history_length=${TEXTCRAFT_HISTORY_LENGTH} output_format=${TEXTCRAFT_OUTPUT_FORMAT} agent_prompt_style=${TEXTCRAFT_AGENT_PROMPT_STYLE} keep_full_assistant_history_include_think=${TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK} stop_done_trajectories=${TEXTCRAFT_STOP_DONE_TRAJECTORIES} val_data_size=${VAL_DATA_SIZE} val_item_ids=${TEXTCRAFT_VAL_ITEM_IDS:-all} use_skills=${TEXTCRAFT_USE_FIXED_SKILLS} skills_by_task_id=${TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID} skills_task_ids=${TEXTCRAFT_FIXED_SKILLS_TASK_IDS:-all} skills_json=${TEXTCRAFT_FIXED_SKILLS_JSON_PATH} max_concurrency=${MAX_CONCURRENCY} max_tokens=${ROUTING_LLM_MAX_TOKENS} temperature=${ROUTING_LLM_TEMPERATURE} top_p=${ROUTING_LLM_TOP_P} data_len=${TEXTCRAFT_DATA_LEN} timeout=${TEXTCRAFT_TIMEOUT} gpu_memory_utilization=${TEXTCRAFT_FIXED_GPU_MEMORY_UTILIZATION} log=${log_path}"
     bash "${EXAMPLES_DIR}/run_textcraft_d2skill_gigpo.sh" "$ENGINE" \
         routing.force_model_enable=True \
         routing.force_model_name="$FIXED_ROUTE_MODEL" \
@@ -84,6 +87,7 @@ for ((run_idx = 0; run_idx < RUNS; run_idx++)); do
         +env.textcraft_agentgym_prompt=True \
         +env.textcraft_stop_done_trajectories="$TEXTCRAFT_STOP_DONE_TRAJECTORIES" \
         +env.textcraft_output_format="$TEXTCRAFT_OUTPUT_FORMAT" \
+        +env.textcraft_agent_prompt_style="$TEXTCRAFT_AGENT_PROMPT_STYLE" \
         +env.textcraft_keep_full_assistant_history_include_think="$TEXTCRAFT_KEEP_FULL_ASSISTANT_HISTORY_INCLUDE_THINK" \
         env.seed="$seed" \
         +env.val_seed="$((seed + 1))" \
@@ -108,6 +112,12 @@ done
 
 python3 "${SCRIPT_DIR}/aggregate_textcraft_fixed_eval_results.py" "$MODEL_LOG_DIR" \
     --json-out "$SUMMARY_JSON"
+
+
+
+
+
+
 
 
 
