@@ -847,6 +847,9 @@ class RayPPOTrainer:
         success_per_traj_list = []
         called_model_list = []
         api_cost_list = []
+        step_input_token_list = []
+        step_output_token_list = []
+        step_total_token_list = []
         alfworld_task_list = []
         textcraft_conversation_list = []
         textcraft_data_idx_list = []
@@ -1079,6 +1082,12 @@ class RayPPOTrainer:
             episode_length_list.append(test_output_gen_batch.non_tensor_batch['episode_lengths'])
             if 'api_costs' in test_output_gen_batch.non_tensor_batch:
                 api_cost_list.append(test_output_gen_batch.non_tensor_batch['api_costs'])
+            if 'step_input_tokens' in test_output_gen_batch.non_tensor_batch:
+                step_input_token_list.append(test_output_gen_batch.non_tensor_batch['step_input_tokens'])
+            if 'step_output_tokens' in test_output_gen_batch.non_tensor_batch:
+                step_output_token_list.append(test_output_gen_batch.non_tensor_batch['step_output_tokens'])
+            if 'step_total_tokens' in test_output_gen_batch.non_tensor_batch:
+                step_total_token_list.append(test_output_gen_batch.non_tensor_batch['step_total_tokens'])
             if 'alfworld_task' in test_output_gen_batch.non_tensor_batch:
                 alfworld_task_list.append(test_output_gen_batch.non_tensor_batch['alfworld_task'])
             if 'called_models' in test_output_gen_batch.non_tensor_batch:
@@ -1120,6 +1129,9 @@ class RayPPOTrainer:
         success_per_traj = np.concatenate(success_per_traj_list, axis=0) if success_per_traj_list else reward_tensor.numpy()
         called_models = np.concatenate(called_model_list, axis=0) if called_model_list else None
         api_costs = np.concatenate(api_cost_list, axis=0) if api_cost_list else None
+        step_input_tokens = np.concatenate(step_input_token_list, axis=0) if step_input_token_list else None
+        step_output_tokens = np.concatenate(step_output_token_list, axis=0) if step_output_token_list else None
+        step_total_tokens = np.concatenate(step_total_token_list, axis=0) if step_total_token_list else None
         alfworld_tasks = np.concatenate(alfworld_task_list, axis=0) if alfworld_task_list else None
         textcraft_conversations = np.concatenate(textcraft_conversation_list, axis=0) if textcraft_conversation_list else None
         textcraft_data_idx = np.concatenate(textcraft_data_idx_list, axis=0) if textcraft_data_idx_list else None
@@ -1195,6 +1207,9 @@ class RayPPOTrainer:
             textcraft_data_idx=textcraft_data_idx,
             textcraft_item_id=textcraft_item_id,
             textcraft_depth=textcraft_depth,
+            step_input_tokens=step_input_tokens,
+            step_output_tokens=step_output_tokens,
+            step_total_tokens=step_total_tokens,
             elapsed_seconds=time.time() - validation_start_time,
         )
 
@@ -1232,6 +1247,9 @@ class RayPPOTrainer:
         textcraft_data_idx=None,
         textcraft_item_id=None,
         textcraft_depth=None,
+        step_input_tokens=None,
+        step_output_tokens=None,
+        step_total_tokens=None,
         elapsed_seconds=None,
     ) -> None:
         """Write compact fixed-model-eval style validation logs when explicitly enabled."""
@@ -1266,6 +1284,26 @@ class RayPPOTrainer:
         if textcraft_depth is not None:
             unique_textcraft_depth = np.asarray(textcraft_depth, dtype=object)[unique_idx]
 
+        step_input_tokens_arr = np.asarray(step_input_tokens, dtype=np.float64).ravel() if step_input_tokens is not None else None
+        step_output_tokens_arr = np.asarray(step_output_tokens, dtype=np.float64).ravel() if step_output_tokens is not None else None
+        step_total_tokens_arr = np.asarray(step_total_tokens, dtype=np.float64).ravel() if step_total_tokens is not None else None
+
+        model_name_for_price = str(self.config.get("routing", {}).get("force_model_name", "") or "").lower()
+        if "deepseek" in model_name_for_price:
+            input_price_per_1m, output_price_per_1m = 0.252, 0.378
+        elif "qwen3-30" in model_name_for_price or "30b" in model_name_for_price:
+            input_price_per_1m, output_price_per_1m = 0.090, 0.300
+        elif "qwen3-8" in model_name_for_price or "8b" in model_name_for_price:
+            input_price_per_1m, output_price_per_1m = 0.050, 0.200
+        else:
+            input_price_per_1m, output_price_per_1m = 0.0, 0.0
+
+        def _sum_for_uid(values, uid):
+            if values is None:
+                return 0.0
+            mask = np.asarray(traj_uids, dtype=object) == uid
+            return float(np.sum(values[mask])) if np.any(mask) else 0.0
+
         def _normalize_depth(value):
             if value is None:
                 return None
@@ -1292,6 +1330,12 @@ class RayPPOTrainer:
                 "finished_step_count": 0,
                 "success_items": [],
                 "failed_items": [],
+                "input_tokens": 0.0,
+                "output_tokens": 0.0,
+                "total_tokens": 0.0,
+                "estimated_input_cost": 0.0,
+                "estimated_output_cost": 0.0,
+                "estimated_api_cost": 0.0,
             }
         )
         per_env_results = {}
@@ -1299,6 +1343,12 @@ class RayPPOTrainer:
             task = str(unique_tasks[i] or "unknown")
             won = bool(unique_success[i])
             cost = float(unique_costs[i])
+            input_tokens = _sum_for_uid(step_input_tokens_arr, uid)
+            output_tokens = _sum_for_uid(step_output_tokens_arr, uid)
+            total_tokens = _sum_for_uid(step_total_tokens_arr, uid)
+            estimated_input_cost = input_tokens * input_price_per_1m / 1_000_000
+            estimated_output_cost = output_tokens * output_price_per_1m / 1_000_000
+            estimated_api_cost = estimated_input_cost + estimated_output_cost
             item_id = _textcraft_item_id(i)
             depth = (
                 _normalize_depth(unique_textcraft_depth[i])
@@ -1312,6 +1362,12 @@ class RayPPOTrainer:
             depth_stats[depth_key]["total"] += 1
             depth_stats[depth_key]["success"] += int(won)
             depth_stats[depth_key]["api_cost"] += cost
+            depth_stats[depth_key]["input_tokens"] += input_tokens
+            depth_stats[depth_key]["output_tokens"] += output_tokens
+            depth_stats[depth_key]["total_tokens"] += total_tokens
+            depth_stats[depth_key]["estimated_input_cost"] += estimated_input_cost
+            depth_stats[depth_key]["estimated_output_cost"] += estimated_output_cost
+            depth_stats[depth_key]["estimated_api_cost"] += estimated_api_cost
             finished_step = int(unique_lengths[i]) if np.isfinite(unique_lengths[i]) else None
             if finished_step is not None:
                 depth_stats[depth_key]["finished_step_sum"] += float(finished_step)
@@ -1328,6 +1384,16 @@ class RayPPOTrainer:
                 "depth": depth_key,
                 "finished_step": finished_step,
                 "api_cost": cost,
+                "token_accounting": {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                    "input_token_price_per_1m": input_price_per_1m,
+                    "output_token_price_per_1m": output_price_per_1m,
+                    "estimated_input_cost": estimated_input_cost,
+                    "estimated_output_cost": estimated_output_cost,
+                    "estimated_api_cost": estimated_api_cost,
+                },
             }
 
         task_rates = {}
@@ -1361,8 +1427,27 @@ class RayPPOTrainer:
                 ),
                 "success_items": list(item["success_items"]),
                 "failed_items": list(item["failed_items"]),
+                "token_accounting": {
+                    "input_tokens": float(item["input_tokens"]),
+                    "output_tokens": float(item["output_tokens"]),
+                    "total_tokens": float(item["total_tokens"]),
+                    "avg_input_tokens": float(item["input_tokens"] / total),
+                    "avg_output_tokens": float(item["output_tokens"] / total),
+                    "avg_total_tokens": float(item["total_tokens"] / total),
+                    "estimated_input_cost": float(item["estimated_input_cost"]),
+                    "estimated_output_cost": float(item["estimated_output_cost"]),
+                    "estimated_api_cost": float(item["estimated_api_cost"]),
+                    "avg_estimated_api_cost": float(item["estimated_api_cost"] / total),
+                },
             }
 
+        total_input_tokens = float(sum(item.get("input_tokens", 0.0) for item in depth_stats.values()))
+        total_output_tokens = float(sum(item.get("output_tokens", 0.0) for item in depth_stats.values()))
+        total_tokens = float(sum(item.get("total_tokens", 0.0) for item in depth_stats.values()))
+        total_estimated_input_cost = float(sum(item.get("estimated_input_cost", 0.0) for item in depth_stats.values()))
+        total_estimated_output_cost = float(sum(item.get("estimated_output_cost", 0.0) for item in depth_stats.values()))
+        total_estimated_api_cost = float(sum(item.get("estimated_api_cost", 0.0) for item in depth_stats.values()))
+        num_unique_envs = int(len(unique_idx)) or 1
         overall_success = float(np.mean(unique_success)) if unique_success.size else 0.0
         result = {
             "global_step": int(getattr(self, "global_steps", 0)),
@@ -1377,6 +1462,21 @@ class RayPPOTrainer:
             "api_cost": {
                 "total": float(np.sum(unique_costs)) if unique_costs.size else 0.0,
                 "avg_per_traj": float(np.mean(unique_costs)) if unique_costs.size else 0.0,
+            },
+            "token_accounting": {
+                "method": "online_api_usage",
+                "input_token_price_per_1m": input_price_per_1m,
+                "output_token_price_per_1m": output_price_per_1m,
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+                "total_tokens": total_tokens,
+                "avg_input_tokens_per_traj": total_input_tokens / num_unique_envs,
+                "avg_output_tokens_per_traj": total_output_tokens / num_unique_envs,
+                "avg_total_tokens_per_traj": total_tokens / num_unique_envs,
+                "estimated_input_cost": total_estimated_input_cost,
+                "estimated_output_cost": total_estimated_output_cost,
+                "estimated_api_cost": total_estimated_api_cost,
+                "avg_estimated_api_cost_per_traj": total_estimated_api_cost / num_unique_envs,
             },
             "per_env_results": per_env_results,
             "metrics": {

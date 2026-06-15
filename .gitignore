@@ -30,3 +30,5 @@ trace_*.json
 verl_agent_textcraft_fixed_route
 *.zip
 *.json
+verl_agent_textcraft_fixed_route_preexp_3x3
+verl_agent_textcraft_fixed_route_skills_5

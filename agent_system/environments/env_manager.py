@@ -20,6 +20,7 @@ import numpy as np
 from functools import partial
 import os
 import json
+import re
 from agent_system.environments.prompts import *
 from agent_system.environments.base import EnvironmentManagerBase, to_numpy
 from agent_system.memory import SimpleMemory, SearchMemory
@@ -1439,10 +1440,45 @@ class TextCraftEnvironmentManager(EnvironmentManagerBase):
             prompts.append(self._format_textcraft_fixed_skills_prompt(skills_by_task_id.get(task_id, [])))
         return prompts
 
+    def _trim_textcraft_assistant_history(self) -> bool:
+        keep_full = bool(self.config.env.get("textcraft_keep_full_assistant_history_include_think", False))
+        if keep_full:
+            return False
+        return bool(self.config.env.get("textcraft_trim_assistant_history", True))
+
+    def _assistant_action_only_content(self, content: Any) -> str:
+        text = str(content or "")
+        matches = re.findall(
+            r"<action>\s*(.*?)\s*</action>",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if matches:
+            action = matches[-1].strip()
+            return f"<action>\n{action}\n</action>"
+        return text.strip()
+
     def _agentgym_chat_payload(self):
         if self.agentgym_conversations is None:
             return None
-        return [[dict(message) for message in conversation] for conversation in self.agentgym_conversations]
+        if not self._trim_textcraft_assistant_history():
+            return [[dict(message) for message in conversation] for conversation in self.agentgym_conversations]
+
+        payload = []
+        for conversation in self.agentgym_conversations:
+            assistant_seen = 0
+            trimmed_conversation = []
+            for message in conversation:
+                copied = dict(message)
+                if copied.get("role") == "assistant":
+                    # Keep the fixed initial acknowledgement. For actual history turns,
+                    # send only the action block to avoid feeding prior long reasoning back.
+                    if assistant_seen > 0:
+                        copied["content"] = self._assistant_action_only_content(copied.get("content", ""))
+                    assistant_seen += 1
+                trimmed_conversation.append(copied)
+            payload.append(trimmed_conversation)
+        return payload
 
     def get_textcraft_trajectory_records(self):
         if self.agentgym_conversations is None:
@@ -1786,4 +1822,7 @@ def make_envs(config):
     else:
         print("Environment not supported")
         exit(1)
+
+
+
 

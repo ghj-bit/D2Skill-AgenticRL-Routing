@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import argparse
 import json
 import math
@@ -66,6 +66,19 @@ def _important_summary(numeric_summary: dict[str, dict[str, Any]]) -> dict[str, 
         "elapsed_seconds",
         "api_cost.total",
         "api_cost.avg_per_traj",
+        "token_accounting.input_token_price_per_1m",
+        "token_accounting.output_token_price_per_1m",
+        "token_accounting.input_tokens",
+        "token_accounting.output_tokens",
+        "token_accounting.total_tokens",
+        "token_accounting.num_model_calls",
+        "token_accounting.estimated_input_cost",
+        "token_accounting.estimated_output_cost",
+        "token_accounting.estimated_api_cost",
+        "token_accounting.avg_input_tokens_per_traj",
+        "token_accounting.avg_output_tokens_per_traj",
+        "token_accounting.avg_total_tokens_per_traj",
+        "token_accounting.avg_estimated_api_cost_per_traj",
     ]
     summary = {
         key: numeric_summary[key]
@@ -81,6 +94,17 @@ def _important_summary(numeric_summary: dict[str, dict[str, Any]]) -> dict[str, 
             continue
         depth, metric = match.groups()
         depth_summary.setdefault(depth, {})[metric] = stats
+    token_depth_summary = {}
+    token_depth_pattern = re.compile(r"^token_accounting\.depth_rates\.([^.]+)\.(input_tokens|output_tokens|total_tokens|num_model_calls|avg_input_tokens|avg_output_tokens|avg_total_tokens|estimated_input_cost|estimated_output_cost|estimated_api_cost|avg_estimated_api_cost)$")
+    for key, stats in numeric_summary.items():
+        match = token_depth_pattern.match(key)
+        if not match:
+            continue
+        depth, metric = match.groups()
+        token_depth_summary.setdefault(depth, {})[metric] = stats
+    for depth, metrics in token_depth_summary.items():
+        depth_summary.setdefault(depth, {})["token_accounting"] = metrics
+
     if depth_summary:
         summary["depth_rates"] = {
             depth: metrics
@@ -152,3 +176,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

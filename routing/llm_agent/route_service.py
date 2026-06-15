@@ -182,7 +182,7 @@ def request_task(data):
     q_id, query_text, system_prompt, TAU, LLM_NAME, api_base, api_key = data
     if LLM_NAME == "":
         print("LLM Name Error")
-        return q_id, "LLM Name Error", 0.0, "", 0.0
+        return q_id, "LLM Name Error", 0.0, "", 0.0, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     # print(LLM_NAME)
     start_time = time.time()
     try:
@@ -201,7 +201,7 @@ def request_task(data):
         token_usage = {}
     elapsed_seconds = time.time() - start_time
 
-    return q_id, single_response, calculate_token_cost(LLM_NAME, token_usage), LLM_NAME, elapsed_seconds
+    return q_id, single_response, calculate_token_cost(LLM_NAME, token_usage), LLM_NAME, elapsed_seconds, token_usage
 
 
 def check_llm_name(target_llm):
@@ -286,11 +286,13 @@ def access_routing_pool(queries, api_base, api_key):
     total_token_costs = []
     called_model_names = []
     model_call_elapsed_seconds = []
-    for _, response, token_cost, called_model_name, elapsed_seconds in ret:
+    token_usage_list = []
+    for _, response, token_cost, called_model_name, elapsed_seconds, token_usage in ret:
         resp.append(response)
         total_token_costs.append(token_cost)
         called_model_names.append(called_model_name)
         model_call_elapsed_seconds.append(float(elapsed_seconds or 0.0))
+        token_usage_list.append(token_usage or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
 
     return {
         "result": resp,
@@ -298,4 +300,5 @@ def access_routing_pool(queries, api_base, api_key):
         "completion_tokens_list": total_token_costs,
         "called_model_names": called_model_names,
         "model_call_elapsed_seconds": model_call_elapsed_seconds,
+        "token_usage_list": token_usage_list,
     }
