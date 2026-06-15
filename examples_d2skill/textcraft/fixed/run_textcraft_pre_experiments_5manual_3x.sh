@@ -69,11 +69,11 @@ run_experiment "qwen3-8B" \
 #     "0,1,2" \
 #     "$@"
 
-# run_experiment "deepseek-v3.2" \
-#     "deepseek-v3.2" \
-#     "0" \
-#     "" \
-#     "$@"
+run_experiment "deepseek-v3.2" \
+    "deepseek-v3.2" \
+    "0" \
+    "" \
+    "$@"
 
 echo "============================================================"
 echo "[TextCraftManualSkills5x3] all experiments finished"
