@@ -1,4 +1,4 @@
-# Copyright 2025 Nanyang Technological University (NTU), Singapore
+﻿# Copyright 2025 Nanyang Technological University (NTU), Singapore
 # and the verl-agent (GiGPO) team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,6 +69,8 @@ TEXTCRAFT_AGENTGYM_TAGGED_OUTPUT_FORMAT = (
     '<action>\n'
     'your next action\n'
     '</action>"\n'
+    'The content inside <think> must be at most 256 tokens.\n'
+    'More than 256 tokens is invalid.\n'
     '\n'
 )
 
@@ -188,3 +190,4 @@ Current observation:
 Now it's your turn to take an action.
 {output_instruction}
 """
+
