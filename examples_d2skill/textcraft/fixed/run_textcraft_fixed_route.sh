@@ -63,7 +63,7 @@ SKILL_ARGS=()
 if [[ "$TEXTCRAFT_USE_FIXED_SKILLS" == "1" || "$TEXTCRAFT_USE_FIXED_SKILLS" == "true" ]]; then
     SKILL_ARGS+=(+env.textcraft_fixed_skills_json_path="$TEXTCRAFT_FIXED_SKILLS_JSON_PATH")
     SKILL_ARGS+=(+env.textcraft_fixed_skills_by_task_id="$TEXTCRAFT_FIXED_SKILLS_BY_TASK_ID")
-    SKILL_ARGS+=(+env.textcraft_fixed_skills_task_ids="$TEXTCRAFT_FIXED_SKILLS_TASK_IDS")
+    SKILL_ARGS+=("+env.textcraft_fixed_skills_task_ids='${TEXTCRAFT_FIXED_SKILLS_TASK_IDS}'")
     SKILL_ARGS+=("+env.textcraft_fixed_skill_ids='${TEXTCRAFT_FIXED_SKILL_IDS}'")
 fi
 
@@ -112,6 +112,7 @@ done
 
 python3 "${SCRIPT_DIR}/aggregate_textcraft_fixed_eval_results.py" "$MODEL_LOG_DIR" \
     --json-out "$SUMMARY_JSON"
+
 
 
 

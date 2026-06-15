@@ -10,7 +10,7 @@ if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" =
     shift
 fi
 
-RUNS="${RUNS:-1}"
+RUNS="${RUNS:-3}"
 BASE_SEED="${BASE_SEED:-0}"
 PREEXP_ROOT="${PREEXP_ROOT:-${PROJECT_DIR}/checkpoints/verl_agent_textcraft_fixed_route_manual_skills_5x3}"
 SKILLS_JSON="${TEXTCRAFT_FIXED_SKILLS_JSON_PATH:-${SCRIPT_DIR}/textcraft_cost_planning_skills.json}"
@@ -58,11 +58,11 @@ run_experiment() {
     bash "${SCRIPT_DIR}/run_textcraft_fixed_route.sh" "${ENGINE_ARGS[@]}" "$@"
 }
 
-# run_experiment "qwen3-8B" \
-#     "qwen3-8B" \
-#     "0" \
-#     "" \
-#     "$@"
+run_experiment "qwen3-8B" \
+    "qwen3-8B" \
+    "0" \
+    "" \
+    "$@"
 
 run_experiment "qwen3-8B_skills" \
     "qwen3-8B" \
@@ -82,11 +82,11 @@ run_experiment "qwen3-8B_3skills" \
     "0,1,2" \
     "$@"
 
-# run_experiment "deepseek-v3.2" \
-#     "deepseek-v3.2" \
-#     "0" \
-#     "" \
-#     "$@"
+run_experiment "deepseek-v3.2" \
+    "deepseek-v3.2" \
+    "0" \
+    "" \
+    "$@"
 
 echo "============================================================"
 echo "[TextCraftManualSkills5x3] all experiments finished"
