@@ -45,11 +45,11 @@ run_experiment() {
     bash "${SCRIPT_DIR}/run_textcraft_fixed_route.sh" "${ENGINE_ARGS[@]}" "$@"
 }
 
-# run_experiment "qwen3-8B" \
-#     "qwen3-8B" \
-#     "0" \
-#     "" \
-#     "$@"
+run_experiment "qwen3-8B" \
+    "qwen3-8B" \
+    "0" \
+    "" \
+    "$@"
 
 # run_experiment "qwen3-8B_skills" \
 #     "qwen3-8B" \
