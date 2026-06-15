@@ -1,4 +1,4 @@
-# Copyright 2025 Nanyang Technological University (NTU), Singapore
+﻿# Copyright 2025 Nanyang Technological University (NTU), Singapore
 # and the verl-agent (GiGPO) team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -704,8 +704,8 @@ class TrajectoryCollector:
                 ] * len(batch.batch["responses"])
             else:
                 route_actions_str = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
-            # print(f'路由器输出：{route_actions_str}')
-            cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success, model_call_elapsed_seconds = self.execute_predictions(
+            # print(f'璺敱鍣ㄨ緭鍑猴細{route_actions_str}')
+            cur_completion_tokens, text_model_actions, models, route_format_valid, model_call_success, model_call_elapsed_seconds, step_prompt_tokens, step_completion_tokens, step_total_tokens = self.execute_predictions(
                 route_actions_str, original_obs, active_mask=active_masks
             )
             route_format_valid = np.array(route_format_valid, dtype=bool)
@@ -759,7 +759,7 @@ class TrajectoryCollector:
             batch.non_tensor_batch['step_output_tokens'] = np.asarray(step_completion_tokens, dtype=np.float32)
             batch.non_tensor_batch['step_total_tokens'] = np.asarray(step_total_tokens, dtype=np.float32)
             batch = self.keep_router_outputs_only(batch, route_actions_for_record, text_model_actions)
-            # print(f"路由模型执行动作：{text_model_actions}")
+            # print(f"璺敱妯″瀷鎵ц鍔ㄤ綔锛歿text_model_actions}")
             next_obs, next_route_obs, rewards, dones, infos = envs.step(text_model_actions, models)
 
             if collect_per_step and envs.retrieved_memories is not None:
@@ -1009,8 +1009,8 @@ class TrajectoryCollector:
         models = []
         model_call_success = []
         model_call_elapsed_seconds = []
-        # 预处理router输出结果，获得content = model:query 
-        #但现在只有model
+        # 棰勫鐞唕outer杈撳嚭缁撴灉锛岃幏寰梒ontent = model:query 
+        #浣嗙幇鍦ㄥ彧鏈塵odel
         contexts = original_obs.get('text', None)
         forced_route_model = self._get_forced_route_model()
         if active_mask is None:
@@ -1033,7 +1033,7 @@ class TrajectoryCollector:
         step_prompt_tokens = []
         step_completion_tokens = []
         step_total_tokens = []
-        # 构造agent的content
+        # 鏋勯€燼gent鐨刢ontent
         # route_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
         # route_queries = [
         #     f"{content}:{context}"
@@ -1206,3 +1206,4 @@ class TrajectoryCollector:
         ret = access_routing_pool(queries=queries, api_base=self.config.api_base, api_key=self.config.api_key)
         
         return ret['result'], ret["completion_tokens_list"], ret.get("called_model_names", []), ret.get("model_call_elapsed_seconds", []), ret.get("token_usage_list", [])
+
