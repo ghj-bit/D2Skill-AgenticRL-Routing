@@ -10,7 +10,7 @@ if [[ $# -gt 0 && ( "$1" == "vllm" || "$1" == "hf" || "$1" == "sglang" || "$1" =
     shift
 fi
 
-RUNS="${RUNS:-3}"
+RUNS="${RUNS:-1}"
 BASE_SEED="${BASE_SEED:-0}"
 PREEXP_ROOT="${PREEXP_ROOT:-${PROJECT_DIR}/checkpoints/verl_agent_textcraft_fixed_route_manual_skills_5x3}"
 SKILLS_JSON="${TEXTCRAFT_FIXED_SKILLS_JSON_PATH:-${SCRIPT_DIR}/textcraft_cost_planning_skills.json}"
