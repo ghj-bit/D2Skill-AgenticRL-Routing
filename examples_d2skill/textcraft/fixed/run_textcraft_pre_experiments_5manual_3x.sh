@@ -58,29 +58,29 @@ run_experiment() {
     bash "${SCRIPT_DIR}/run_textcraft_fixed_route.sh" "${ENGINE_ARGS[@]}" "$@"
 }
 
-run_experiment "qwen3-8B" \
+# run_experiment "qwen3-8B" \
+#     "qwen3-8B" \
+#     "0" \
+#     "" \
+#     "$@"
+
+run_experiment "qwen3-8B_skills" \
     "qwen3-8B" \
+    "1" \
     "0" \
-    "" \
     "$@"
 
-# run_experiment "qwen3-8B_skills" \
-#     "qwen3-8B" \
-#     "1" \
-#     "0" \
-#     "$@"
+run_experiment "qwen3-8B_2skills" \
+    "qwen3-8B" \
+    "1" \
+    "0,1" \
+    "$@"
 
-# run_experiment "qwen3-8B_2skills" \
-#     "qwen3-8B" \
-#     "1" \
-#     "0,1" \
-#     "$@"
-
-# run_experiment "qwen3-8B_3skills" \
-#     "qwen3-8B" \
-#     "1" \
-#     "0,1,2" \
-#     "$@"
+run_experiment "qwen3-8B_3skills" \
+    "qwen3-8B" \
+    "1" \
+    "0,1,2" \
+    "$@"
 
 # run_experiment "deepseek-v3.2" \
 #     "deepseek-v3.2" \
