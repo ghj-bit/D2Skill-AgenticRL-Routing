@@ -1,6 +1,6 @@
 MODEL_CONF = {
     "qwen3-8B": {
-        "api_base": "https://ai-notebook-inspire.sii.edu.cn/ws-9dcc0e1f-80a4-4af2-bc2f-0e352e7b17e6/project-b795c114-135a-40db-b3d0-19b60f25237b/user-543feed4-0be2-4972-8987-a324af06c93f/vscode/6885e439-7002-4233-b0fc-46dc16ae00eb/1dc830a1-9cea-4c7a-ada4-65a560ea4921/proxy/8042/v1",
+        "api_base": "https://nat-notebook-inspire.sii.edu.cn/ws-6040202d-b785-4b37-98b0-c68d65dd52ce/project-b795c114-135a-40db-b3d0-19b60f25237b/user-543feed4-0be2-4972-8987-a324af06c93f/vscode/6f0272b8-f65f-4bfe-bfb8-d0293f720d78/d07e4730-711c-4e94-a280-4579395017a4/proxy/8042/v1",
         "api_key": "empty"
     },
     "deepseek": {
